@@ -32,4 +32,4 @@ go.work.sum
 # .vscode/
 
 # Built binary
-claude-status-line-go
+/claude-status-line-go
