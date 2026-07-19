@@ -1,0 +1,26 @@
+version: 2
+
+builds:
+  - main: ./cmd/claude-status-line-go
+    binary: claude-status-line-go
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: ["tar.gz"]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: williamokano
+    name: claude-status-line-go
+  draft: false
+  prerelease: auto

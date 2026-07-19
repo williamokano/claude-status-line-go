@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"encoding/json"
@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/williamokano/claude-status-line-go/internal/config"
 )
 
 type Input struct {
@@ -48,24 +50,6 @@ type RateLimit struct {
 	ResetsAt       string  `json:"resets_at"`
 }
 
-type Config struct {
-	ShowCost     bool  `env:"SHOW_COST" default:"true"`
-	ShowWeekly   bool  `env:"SHOW_WEEKLY" default:"true"`
-	ShowTokens   bool  `env:"SHOW_TOKENS" default:"true"`
-	ShowGit      bool  `env:"SHOW_GIT" default:"true"`
-	ShowGitDirty bool  `env:"SHOW_GIT_DIRTY" default:"true"`
-
-	BarSize      int `env:"BAR_SIZE" default:"10"`
-
-	LimitWarn    int `env:"LIMIT_WARN" default:"60"`
-	LimitCrit    int `env:"LIMIT_CRIT" default:"85"`
-
-	CtxWarn      int `env:"CTX_WARN" default:"60"`
-	CtxCrit      int `env:"CTX_CRIT" default:"85"`
-
-	WeeklyShowAt int `env:"WEEKLY_SHOW_AT" default:"60"`
-}
-
 const (
 	Reset  = "\033[0m"
 	Dim    = "\033[2m"
@@ -79,21 +63,23 @@ const (
 	White  = "\033[37m"
 )
 
-var cfg Config
+type Service struct {
+	cfg config.Config
+}
 
-func main() {
-	loadConfig()
+func New(cfg config.Config) *Service {
+	return &Service{cfg: cfg}
+}
 
+func (s *Service) Run() error {
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("reading stdin: %w", err)
 	}
 
 	var input Input
 	if err := json.Unmarshal(data, &input); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing JSON: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("parsing JSON: %w", err)
 	}
 
 	ctxPercent := int(input.ContextWindow.UsedPercentage)
@@ -109,95 +95,53 @@ func main() {
 	modelStr := shortModel(input.Model.DisplayName)
 	sizeStr := contextSize(ctxSize)
 
-	ctxColor := colorForPercent(ctxPercent, cfg.CtxWarn, cfg.CtxCrit)
-	limitColor := colorForPercent(limit5, cfg.LimitWarn, cfg.LimitCrit)
+	ctxColor := colorForPercent(ctxPercent, s.cfg.CtxWarn, s.cfg.CtxCrit)
+	limitColor := colorForPercent(limit5, s.cfg.LimitWarn, s.cfg.LimitCrit)
 
-	ctxBar := progressBar(ctxPercent)
-	limitBar := progressBar(limit5)
+	ctxBar := progressBar(ctxPercent, s.cfg.BarSize)
+	limitBar := progressBar(limit5, s.cfg.BarSize)
 
 	projectName := filepath.Base(input.Workspace.ProjectDir)
 
-	top := fmt.Sprintf("%s[%s·%s]%s", Cyan, modelStr, sizeStr, Reset)
-	top += fmt.Sprintf(" %s📁 %s%s", Yellow, projectName, Reset)
+	top := fmt.Sprintf("%s🧠 %s·%s%s", Cyan, modelStr, sizeStr, Reset)
+	top += fmt.Sprintf(" %s│ 📁 %s%s", Dim, projectName, Reset)
 
-	branch, dirty := getGitInfo()
+	branch, dirty := s.getGitInfo()
 	if branch != "" {
-		top += fmt.Sprintf(" %s🌿 %s%s%s", Green, branch, dirty, Reset)
+		top += fmt.Sprintf(" %s│ 🌿 %s%s%s", Dim, branch, dirty, Reset)
 	}
 
 	bottom := ""
-	bottom += fmt.Sprintf("%s5h %s %d%%", limitColor, limitBar, limit5)
+	bottom += fmt.Sprintf("%s🟡5h %s %d%%", limitColor, limitBar, limit5)
 
 	resetIn := timeUntil(limit5Reset)
 	if resetIn != "" {
 		bottom += fmt.Sprintf(" ↺%s", resetIn)
 	}
 
-	bottom += fmt.Sprintf("%s │ ", Reset)
-	bottom += fmt.Sprintf("%sCTX %s %d%%%s", ctxColor, ctxBar, ctxPercent, Reset)
+	bottom += fmt.Sprintf("%s %s│ %sCTX %s %d%%%s", Reset, Dim, ctxColor, ctxBar, ctxPercent, Reset)
 
-	if cfg.ShowTokens {
-		bottom += fmt.Sprintf(" │ I%s O%s ⚡%s",
+	if s.cfg.ShowTokens {
+		bottom += fmt.Sprintf(" %s│ I%s O%s ⚡%s",
+			Dim,
 			humanTokens(tokensIn),
 			humanTokens(tokensOut),
 			humanTokens(tokensCache),
 		)
 	}
 
-	if cfg.ShowWeekly && weekly >= cfg.WeeklyShowAt {
-		bottom += fmt.Sprintf(" │ %s7d %d%%%s", Dim, weekly, Reset)
+	if s.cfg.ShowWeekly && weekly >= s.cfg.WeeklyShowAt {
+		bottom += fmt.Sprintf(" %s│ %s7d %d%%%s", Dim, Dim, weekly, Reset)
 	}
 
-	if cfg.ShowCost {
-		bottom += fmt.Sprintf(" │ %s$%.2f%s", Yellow, cost, Reset)
+	if s.cfg.ShowCost {
+		bottom += fmt.Sprintf(" %s│ %s$%.2f%s", Dim, Yellow, cost, Reset)
 	}
 
 	fmt.Println(top)
 	fmt.Println(bottom)
-}
 
-func loadConfig() {
-	cfg = Config{
-		ShowCost:     getEnvBool("SHOW_COST", true),
-		ShowWeekly:   getEnvBool("SHOW_WEEKLY", true),
-		ShowTokens:   getEnvBool("SHOW_TOKENS", true),
-		ShowGit:      getEnvBool("SHOW_GIT", true),
-		ShowGitDirty: getEnvBool("SHOW_GIT_DIRTY", true),
-
-		BarSize:      getEnvInt("BAR_SIZE", 10),
-
-		LimitWarn:    getEnvInt("LIMIT_WARN", 60),
-		LimitCrit:    getEnvInt("LIMIT_CRIT", 85),
-
-		CtxWarn:      getEnvInt("CTX_WARN", 60),
-		CtxCrit:      getEnvInt("CTX_CRIT", 85),
-
-		WeeklyShowAt: getEnvInt("WEEKLY_SHOW_AT", 60),
-	}
-}
-
-func getEnvBool(key string, def bool) bool {
-	val := os.Getenv(key)
-	if val == "" {
-		return def
-	}
-	b, err := strconv.ParseBool(val)
-	if err != nil {
-		return def
-	}
-	return b
-}
-
-func getEnvInt(key string, def int) int {
-	val := os.Getenv(key)
-	if val == "" {
-		return def
-	}
-	i, err := strconv.Atoi(val)
-	if err != nil {
-		return def
-	}
-	return i
+	return nil
 }
 
 func shortModel(model string) string {
@@ -234,9 +178,9 @@ func humanTokens(n int) string {
 	return strconv.Itoa(n)
 }
 
-func progressBar(pct int) string {
-	filled := pct * cfg.BarSize / 100
-	empty := cfg.BarSize - filled
+func progressBar(pct, barSize int) string {
+	filled := pct * barSize / 100
+	empty := barSize - filled
 	return strings.Repeat("█", filled) + strings.Repeat("░", empty)
 }
 
@@ -273,8 +217,8 @@ func timeUntil(ts string) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-func getGitInfo() (string, string) {
-	if !cfg.ShowGit {
+func (s *Service) getGitInfo() (string, string) {
+	if !s.cfg.ShowGit {
 		return "", ""
 	}
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
@@ -291,7 +235,7 @@ func getGitInfo() (string, string) {
 	branch := strings.TrimSpace(string(branchOut))
 
 	dirty := ""
-	if cfg.ShowGitDirty {
+	if s.cfg.ShowGitDirty {
 		statusCmd := exec.Command("git", "status", "--porcelain")
 		statusOut, err := statusCmd.Output()
 		if err == nil {
