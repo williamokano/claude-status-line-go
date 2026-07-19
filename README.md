@@ -1,30 +1,65 @@
-# Installation
+# claude-status-line-go
 
-## Using go install
+Go CLI tool that reads Claude Code JSON from stdin and prints a formatted status line.
 
-```bash
-# Latest version
-go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest
+## Output Format
 
-# Specific version
-go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@v1.0.0
+```
+🧠 O4.7·1M │ 📁 payments-api │ 🌿 feature/calendar ●3
+🟡5h ████████░░ 83% ↺22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 7d 74% │ $7.92
 ```
 
-## From Source
+## Installation
+
+### Using go install
+
+```bash
+go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/williamokano/claude-status-line-go.git
 cd claude-status-line-go
-go build -o claude-status-line-go ./cmd/claude-status-line-go
+make build
 ```
 
-## Configuration
+## Usage
 
-All options can be configured via environment variables (prefix `CSL_`):
+### As Claude Code Status Line
+
+Add to your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "claude-status-line-go"
+  }
+}
+```
+
+### Standalone
+
+```bash
+echo '{"model":...}' | claude-status-line-go
+```
+
+## CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `-h, --help` | Print usage information |
+| `-v, --version` | Print version |
+| `--no-color` | Disable ANSI color output |
+| `--completion bash\|zsh\|fish` | Print shell completion script |
+
+## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CSL_SHOW_COST` | `true` | Show cost in status line |
+| `CSL_SHOW_COST` | `true` | Show session cost |
 | `CSL_SHOW_WEEKLY` | `true` | Show weekly usage |
 | `CSL_SHOW_TOKENS` | `true` | Show token counts |
 | `CSL_SHOW_GIT` | `true` | Show git branch |
@@ -35,23 +70,13 @@ All options can be configured via environment variables (prefix `CSL_`):
 | `CSL_CTX_WARN` | `60` | Context warning threshold (%) |
 | `CSL_CTX_CRIT` | `85` | Context critical threshold (%) |
 | `CSL_WEEKLY_SHOW_AT` | `60` | Show weekly when >= this % |
+| `CSL_FORMAT` | — | Custom output format template |
+| `NO_COLOR` | — | Set to any value to disable ANSI colors |
 
-Example:
-```bash
-export CSL_SHOW_TOKENS=false
-export CSL_BAR_SIZE=15
-export CSL_LIMIT_WARN=50
-claude-status-line-go
-```
+## Configuration File
 
-### Config File
+Create `~/.config/claude-status-line-go/claude-status-line.yaml`:
 
-The tool also reads `claude-status-line.yaml` from:
-- `~/.config/claude-status-line-go/claude-status-line.yaml` (Linux/macOS)
-- `%APPDATA%\claude-status-line-go\claude-status-line.yaml` (Windows)
-- Current directory (`.`)
-
-Example config file:
 ```yaml
 show_cost: true
 show_weekly: true
@@ -66,49 +91,53 @@ ctx_crit: 85
 weekly_show_at: 60
 ```
 
-## Usage
+## Custom Output Format
 
-### As Claude Code Status Line
+Use the `CSL_FORMAT` env var or `format` config field to customize the output.
+Available placeholders:
 
-Add to your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
+| Placeholder | Description |
+|-------------|-------------|
+| `{model}` | Short model name (O4.7, S5, H) |
+| `{ctx_size}` | Context window size (200k, 1M) |
+| `{project}` | Project folder name |
+| `{branch}` | Git branch name |
+| `{dirty}` | Dirty file count (●3) |
+| `{limit_bar}` | Rate limit progress bar |
+| `{limit_pct}` | Rate limit percentage |
+| `{limit_color}` | Rate limit color ANSI code |
+| `{limit_reset}` | Time until rate limit reset |
+| `{ctx_bar}` | Context progress bar |
+| `{ctx_pct}` | Context percentage |
+| `{ctx_color}` | Context color ANSI code |
+| `{tokens_in}` | Input tokens (42k, 2.3M) |
+| `{tokens_out}` | Output tokens |
+| `{tokens_cache}` | Cache tokens |
+| `{cost}` | Session cost |
+| `{weekly_pct}` | Weekly usage percentage |
+| `{reset}`, `{dim}`, `{bold}` | ANSI format codes |
+| `{red}`, `{green}`, `{yellow}` | ANSI color codes |
+| `{blue}`, `{magenta}`, `{cyan}`, `{white}` | ANSI color codes |
 
-```json
-{
-  "statusLine": {
-    "command": "claude-status-line-go",
-    "args": []
-  }
-}
+Example:
+
+```yaml
+format: "{cyan}🧠 {model}·{ctx_size}{reset} {dim}│ 📁 {project}{reset} {dim}│ 🌿 {branch}{reset}{dirty}"
 ```
 
-With environment variables:
-```json
-{
-  "statusLine": {
-    "command": "claude-status-line-go",
-    "args": [],
-    "env": {
-      "CSL_BAR_SIZE": "15",
-      "CSL_SHOW_TOKENS": "false"
-    }
-  }
-}
-```
-
-### Standalone (for testing)
-
-Pipe Claude Code JSON output to the tool:
+## Shell Completions
 
 ```bash
-claude-code --output-format json | claude-status-line-go
+eval "$(claude-status-line-go --completion bash)"  # Bash
+eval "$(claude-status-line-go --completion zsh)"   # Zsh
+claude-status-line-go --completion fish | source    # Fish
 ```
 
-## Output Format
+## Development
 
+```bash
+make build   # Build the binary
+make test    # Run tests
+make lint    # Lint code
+make clean   # Clean artifacts
 ```
-🧠 O4.7·1M │ 📁 payments-api │ 🌿 feature/calendar ●3
-🟡5h ████████░░ 83% ↺22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 7d 74% │ $7.92
-```
-
-- **Top line**: Model, project folder, git branch (+ dirty count)
-- **Bottom line**: 5h rate limit, context usage, tokens (in/out/cache), weekly usage, cost
