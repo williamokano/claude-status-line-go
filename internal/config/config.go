@@ -23,6 +23,7 @@ type Config struct {
 	WeeklyShowAt int
 
 	NoColor      bool
+	Format       string
 }
 
 func DefaultConfig() Config {
@@ -65,6 +66,7 @@ func Load() (Config, error) {
 	cfg.WeeklyShowAt = getEnvInt("WEEKLY_SHOW_AT", cfg.WeeklyShowAt)
 
 	cfg.NoColor = getEnvBool("NO_COLOR", false)
+	cfg.Format = os.Getenv("CSL_FORMAT")
 
 	return cfg, nil
 }

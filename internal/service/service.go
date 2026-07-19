@@ -111,6 +111,16 @@ func (s *Service) Run() error {
 
 	projectName := filepath.Base(input.Workspace.ProjectDir)
 
+	if s.cfg.Format != "" {
+		out := s.renderFormat(modelStr, sizeStr, ctxPercent, limit5, ctxBar, limitBar,
+			ctxColor, limitColor, cost, projectName, tokensIn, tokensOut, tokensCache, weekly, limit5Reset)
+		if s.cfg.NoColor {
+			out = stripANSI(out)
+		}
+		fmt.Println(out)
+		return nil
+	}
+
 	top := fmt.Sprintf("%s🧠 %s·%s%s", Cyan, modelStr, sizeStr, Reset)
 	top += fmt.Sprintf(" %s│ 📁 %s%s", Dim, projectName, Reset)
 
@@ -144,7 +154,7 @@ func (s *Service) Run() error {
 
 	if s.cfg.ShowCost {
 		bottom += fmt.Sprintf(" %s│ %s$%.2f%s", Dim, Yellow, cost, Reset)
-	}
+		}
 
 	out := top + "\n" + bottom
 
@@ -158,6 +168,46 @@ func (s *Service) Run() error {
 
 func stripANSI(s string) string {
 	return ansiRegexp.ReplaceAllString(s, "")
+}
+
+func (s *Service) renderFormat(modelStr, sizeStr string, ctxPercent, limit5 int,
+	ctxBar, limitBar, ctxColor, limitColor string, cost float64, projectName string,
+	tokensIn, tokensOut, tokensCache, weekly int, limit5Reset string) string {
+
+	branch, dirty := s.getGitInfo()
+	resetIn := timeUntil(limit5Reset)
+
+	repl := strings.NewReplacer(
+		"{model}", modelStr,
+		"{model_name}", "",
+		"{ctx_size}", sizeStr,
+		"{project}", projectName,
+		"{branch}", branch,
+		"{dirty}", dirty,
+		"{limit_bar}", limitBar,
+		"{limit_pct}", strconv.Itoa(limit5),
+		"{limit_color}", limitColor,
+		"{limit_reset}", resetIn,
+		"{ctx_bar}", ctxBar,
+		"{ctx_pct}", strconv.Itoa(ctxPercent),
+		"{ctx_color}", ctxColor,
+		"{tokens_in}", humanTokens(tokensIn),
+		"{tokens_out}", humanTokens(tokensOut),
+		"{tokens_cache}", humanTokens(tokensCache),
+		"{cost}", fmt.Sprintf("%.2f", cost),
+		"{weekly_pct}", strconv.Itoa(weekly),
+		"{reset}", Reset,
+		"{dim}", Dim,
+		"{bold}", Bold,
+		"{red}", Red,
+		"{green}", Green,
+		"{yellow}", Yellow,
+		"{blue}", Blue,
+		"{magenta}", Magenta,
+		"{cyan}", Cyan,
+		"{white}", White,
+	)
+	return repl.Replace(s.cfg.Format)
 }
 
 func shortModel(model string) string {
