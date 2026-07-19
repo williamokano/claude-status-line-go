@@ -33,3 +33,4 @@ go.work.sum
 
 # Built binary
 /claude-status-line-go
+*.tar.gz
