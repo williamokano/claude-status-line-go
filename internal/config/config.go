@@ -21,6 +21,8 @@ type Config struct {
 	CtxCrit      int
 
 	WeeklyShowAt int
+
+	NoColor      bool
 }
 
 func DefaultConfig() Config {
@@ -61,6 +63,8 @@ func Load() (Config, error) {
 	cfg.CtxCrit = getEnvInt("CTX_CRIT", cfg.CtxCrit)
 
 	cfg.WeeklyShowAt = getEnvInt("WEEKLY_SHOW_AT", cfg.WeeklyShowAt)
+
+	cfg.NoColor = getEnvBool("NO_COLOR", false)
 
 	return cfg, nil
 }

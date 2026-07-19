@@ -7,12 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
 )
+
+var ansiRegexp = regexp.MustCompile(`\033\[[0-9;]*m`)
 
 type Input struct {
 	Model struct {
@@ -72,6 +75,11 @@ func New(cfg config.Config) *Service {
 }
 
 func (s *Service) Run() error {
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		return fmt.Errorf("stdin is a terminal; pipe Claude Code JSON to this tool")
+	}
+
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return fmt.Errorf("reading stdin: %w", err)
@@ -138,10 +146,18 @@ func (s *Service) Run() error {
 		bottom += fmt.Sprintf(" %s│ %s$%.2f%s", Dim, Yellow, cost, Reset)
 	}
 
-	fmt.Println(top)
-	fmt.Println(bottom)
+	out := top + "\n" + bottom
 
+	if s.cfg.NoColor {
+		out = stripANSI(out)
+	}
+
+	fmt.Println(out)
 	return nil
+}
+
+func stripANSI(s string) string {
+	return ansiRegexp.ReplaceAllString(s, "")
 }
 
 func shortModel(model string) string {
