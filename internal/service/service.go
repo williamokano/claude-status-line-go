@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,15 +92,15 @@ func (s *Service) Run() error {
 		fmt.Fprintf(os.Stderr, "claude-status-line-go: partial JSON parse: %v\n", err)
 	}
 
-	ctxPercent := int(input.ContextWindow.UsedPercentage)
+	ctxPercent := int(math.Round(input.ContextWindow.UsedPercentage))
 	ctxSize := input.ContextWindow.ContextWindowSize
 	tokensIn := input.ContextWindow.CurrentUsage.InputTokens
 	tokensOut := input.ContextWindow.CurrentUsage.OutputTokens
 	tokensCache := input.ContextWindow.CurrentUsage.CacheCreationInputTokens + input.ContextWindow.CurrentUsage.CacheReadInputTokens
 	cost := input.Cost.TotalCostUSD
-	limit5 := int(input.RateLimits.FiveHour.UsedPercentage)
+	limit5 := int(math.Round(input.RateLimits.FiveHour.UsedPercentage))
 	limit5Reset := input.RateLimits.FiveHour.ResetsAt
-	weekly := int(input.RateLimits.Weekly.UsedPercentage)
+	weekly := int(math.Round(input.RateLimits.Weekly.UsedPercentage))
 
 	modelStr := shortModel(input.Model.DisplayName)
 	sizeStr := contextSize(ctxSize)
