@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	flag "github.com/spf13/pflag"
@@ -12,7 +13,49 @@ import (
 	"github.com/williamokano/claude-status-line-go/internal/service"
 )
 
+// version is overridden at build time via -ldflags "-X main.version=...".
+// Release builds (goreleaser) set it to the git tag. When it's left at the
+// default, resolveVersion falls back to Go's embedded VCS build info, which
+// covers `go install`, `go build`, and `go run` from any branch/commit.
 var version = "dev"
+
+func resolveVersion() string {
+	if version != "dev" {
+		return version
+	}
+
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version
+	}
+
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+
+	var revision string
+	var dirty bool
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			revision = s.Value
+		case "vcs.modified":
+			dirty = s.Value == "true"
+		}
+	}
+
+	if revision == "" {
+		return version
+	}
+	if len(revision) > 7 {
+		revision = revision[:7]
+	}
+
+	if dirty {
+		return fmt.Sprintf("dev-%s-dirty", revision)
+	}
+	return fmt.Sprintf("dev-%s", revision)
+}
 
 func main() {
 	showVersion := flag.BoolP("version", "v", false, "print version and exit")
@@ -23,7 +66,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("claude-status-line-go %s\n", version)
+		fmt.Printf("claude-status-line-go %s\n", resolveVersion())
 		os.Exit(0)
 	}
 

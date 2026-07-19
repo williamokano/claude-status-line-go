@@ -3,6 +3,8 @@ version: 2
 builds:
   - main: ./cmd/claude-status-line-go
     binary: claude-status-line-go
+    ldflags:
+      - -s -w -X main.version={{.Version}}
     goos:
       - linux
       - darwin
