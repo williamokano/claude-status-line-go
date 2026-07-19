@@ -48,6 +48,24 @@ type RateLimit struct {
 	ResetsAt       string  `json:"resets_at"`
 }
 
+type Config struct {
+	ShowCost     bool  `env:"SHOW_COST" default:"true"`
+	ShowWeekly   bool  `env:"SHOW_WEEKLY" default:"true"`
+	ShowTokens   bool  `env:"SHOW_TOKENS" default:"true"`
+	ShowGit      bool  `env:"SHOW_GIT" default:"true"`
+	ShowGitDirty bool  `env:"SHOW_GIT_DIRTY" default:"true"`
+
+	BarSize      int `env:"BAR_SIZE" default:"10"`
+
+	LimitWarn    int `env:"LIMIT_WARN" default:"60"`
+	LimitCrit    int `env:"LIMIT_CRIT" default:"85"`
+
+	CtxWarn      int `env:"CTX_WARN" default:"60"`
+	CtxCrit      int `env:"CTX_CRIT" default:"85"`
+
+	WeeklyShowAt int `env:"WEEKLY_SHOW_AT" default:"60"`
+}
+
 const (
 	Reset  = "\033[0m"
 	Dim    = "\033[2m"
@@ -61,24 +79,11 @@ const (
 	White  = "\033[37m"
 )
 
-const (
-	BarSize       = 10
-	LimitWarn     = 60
-	LimitCrit     = 85
-	CtxWarn       = 60
-	CtxCrit       = 85
-	WeeklyShowAt  = 60
-)
-
-var (
-	ShowCost      = true
-	ShowWeekly    = true
-	ShowTokens    = true
-	ShowGit       = true
-	ShowGitDirty  = true
-)
+var cfg Config
 
 func main() {
+	loadConfig()
+
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
@@ -104,8 +109,8 @@ func main() {
 	modelStr := shortModel(input.Model.DisplayName)
 	sizeStr := contextSize(ctxSize)
 
-	ctxColor := colorForPercent(ctxPercent, CtxWarn, CtxCrit)
-	limitColor := colorForPercent(limit5, LimitWarn, LimitCrit)
+	ctxColor := colorForPercent(ctxPercent, cfg.CtxWarn, cfg.CtxCrit)
+	limitColor := colorForPercent(limit5, cfg.LimitWarn, cfg.LimitCrit)
 
 	ctxBar := progressBar(ctxPercent)
 	limitBar := progressBar(limit5)
@@ -131,7 +136,7 @@ func main() {
 	bottom += fmt.Sprintf("%s │ ", Reset)
 	bottom += fmt.Sprintf("%sCTX %s %d%%%s", ctxColor, ctxBar, ctxPercent, Reset)
 
-	if ShowTokens {
+	if cfg.ShowTokens {
 		bottom += fmt.Sprintf(" │ I%s O%s ⚡%s",
 			humanTokens(tokensIn),
 			humanTokens(tokensOut),
@@ -139,16 +144,60 @@ func main() {
 		)
 	}
 
-	if ShowWeekly && weekly >= WeeklyShowAt {
+	if cfg.ShowWeekly && weekly >= cfg.WeeklyShowAt {
 		bottom += fmt.Sprintf(" │ %s7d %d%%%s", Dim, weekly, Reset)
 	}
 
-	if ShowCost {
+	if cfg.ShowCost {
 		bottom += fmt.Sprintf(" │ %s$%.2f%s", Yellow, cost, Reset)
 	}
 
 	fmt.Println(top)
 	fmt.Println(bottom)
+}
+
+func loadConfig() {
+	cfg = Config{
+		ShowCost:     getEnvBool("SHOW_COST", true),
+		ShowWeekly:   getEnvBool("SHOW_WEEKLY", true),
+		ShowTokens:   getEnvBool("SHOW_TOKENS", true),
+		ShowGit:      getEnvBool("SHOW_GIT", true),
+		ShowGitDirty: getEnvBool("SHOW_GIT_DIRTY", true),
+
+		BarSize:      getEnvInt("BAR_SIZE", 10),
+
+		LimitWarn:    getEnvInt("LIMIT_WARN", 60),
+		LimitCrit:    getEnvInt("LIMIT_CRIT", 85),
+
+		CtxWarn:      getEnvInt("CTX_WARN", 60),
+		CtxCrit:      getEnvInt("CTX_CRIT", 85),
+
+		WeeklyShowAt: getEnvInt("WEEKLY_SHOW_AT", 60),
+	}
+}
+
+func getEnvBool(key string, def bool) bool {
+	val := os.Getenv(key)
+	if val == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		return def
+	}
+	return b
+}
+
+func getEnvInt(key string, def int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return def
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		return def
+	}
+	return i
 }
 
 func shortModel(model string) string {
@@ -186,8 +235,8 @@ func humanTokens(n int) string {
 }
 
 func progressBar(pct int) string {
-	filled := pct * BarSize / 100
-	empty := BarSize - filled
+	filled := pct * cfg.BarSize / 100
+	empty := cfg.BarSize - filled
 	return strings.Repeat("█", filled) + strings.Repeat("░", empty)
 }
 
@@ -225,7 +274,7 @@ func timeUntil(ts string) string {
 }
 
 func getGitInfo() (string, string) {
-	if !ShowGit {
+	if !cfg.ShowGit {
 		return "", ""
 	}
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
@@ -242,7 +291,7 @@ func getGitInfo() (string, string) {
 	branch := strings.TrimSpace(string(branchOut))
 
 	dirty := ""
-	if ShowGitDirty {
+	if cfg.ShowGitDirty {
 		statusCmd := exec.Command("git", "status", "--porcelain")
 		statusOut, err := statusCmd.Output()
 		if err == nil {
