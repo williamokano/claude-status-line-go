@@ -8,6 +8,8 @@ import (
 	"github.com/williamokano/claude-status-line-go/internal/service"
 )
 
+var version = "dev"
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
