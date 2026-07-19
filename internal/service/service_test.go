@@ -17,11 +17,12 @@ func TestShortModel(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"Opus", "Opus 4.7", "O4.7"},
-		{"Sonnet", "Claude 3.5 Sonnet", "S5"},
-		{"Haiku", "Claude 3 Haiku", "H"},
-		{"Unknown", "Unknown Model", "Unknown Model"},
-		{"Empty", "", ""},
+		{"Opus", "Opus 4.8", "Opus 4.8"},
+		{"Sonnet", "Sonnet 5", "Sonnet 5"},
+		{"Haiku", "Haiku 4.5", "Haiku 4.5"},
+		{"Fable", "Fable 5", "Fable 5"},
+		{"Unrecognized", "Some Future Model", "Some Future Model"},
+		{"Empty", "", "Unknown"},
 	}
 
 	for _, tt := range tests {
@@ -134,31 +135,27 @@ func TestColorForPercent(t *testing.T) {
 }
 
 func TestTimeUntil(t *testing.T) {
-	future := time.Now().Add(2*time.Hour + 30*time.Minute).Format(time.RFC3339)
-	past := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	future := time.Now().Add(2*time.Hour + 30*time.Minute).Unix()
+	past := time.Now().Add(-1 * time.Hour).Unix()
 
 	tests := []struct {
 		name     string
-		input    string
+		input    int64
 		expected string
 	}{
 		{"Future time", future, "2h30m"},
 		{"Past time", past, "0m"},
-		{"Empty string", "", ""},
-		{"Invalid format", "invalid", ""},
+		{"Zero", 0, ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := timeUntil(tt.input)
 			if tt.name == "Future time" && result == "" {
-				t.Errorf("timeUntil(%q) = %q, want non-empty", tt.input, result)
+				t.Errorf("timeUntil(%d) = %q, want non-empty", tt.input, result)
 			}
-			if tt.name == "Empty string" && result != "" {
-				t.Errorf("timeUntil(%q) = %q, want empty", tt.input, result)
-			}
-			if tt.name == "Invalid format" && result != "" {
-				t.Errorf("timeUntil(%q) = %q, want empty", tt.input, result)
+			if tt.name == "Zero" && result != "" {
+				t.Errorf("timeUntil(%d) = %q, want empty", tt.input, result)
 			}
 		})
 	}
@@ -182,7 +179,7 @@ func TestService_Run(t *testing.T) {
 	svc := New(cfg)
 
 	input := `{
-		"model": {"display_name": "Opus 4.7", "id": "opus-4.7"},
+		"model": {"display_name": "Opus 4.8", "id": "claude-opus-4-8"},
 		"workspace": {"project_dir": "/home/user/payments-api", "current_dir": "/home/user/payments-api"},
 		"context_window": {
 			"used_percentage": 68,
@@ -196,8 +193,8 @@ func TestService_Run(t *testing.T) {
 		},
 		"cost": {"total_cost_usd": 7.92, "total_duration_ms": 123456},
 		"rate_limits": {
-			"five_hour": {"used_percentage": 83, "resets_at": "2026-07-19T22:30:00Z"},
-			"weekly": {"used_percentage": 74, "resets_at": "2026-07-26T00:00:00Z"}
+			"five_hour": {"used_percentage": 83, "resets_at": 1784586600},
+			"seven_day": {"used_percentage": 74, "resets_at": 1785191400}
 		}
 	}`
 
@@ -227,7 +224,7 @@ func TestService_Run(t *testing.T) {
 	io.Copy(buf, rOut)
 	output := buf.String()
 
-	if !strings.Contains(output, "🧠 O4.7·1M") {
+	if !strings.Contains(output, "🧠 Opus 4.8·1M") {
 		t.Errorf("output missing model: %s", output)
 	}
 	if !strings.Contains(output, "payments-api") {
@@ -275,7 +272,7 @@ func TestService_Run_MinimalConfig(t *testing.T) {
 	svc := New(cfg)
 
 	input := `{
-		"model": {"display_name": "Sonnet 3.5", "id": "sonnet-3.5"},
+		"model": {"display_name": "Sonnet 5", "id": "claude-sonnet-5"},
 		"workspace": {"project_dir": "/home/user/test", "current_dir": "/home/user/test"},
 		"context_window": {
 			"used_percentage": 50,
@@ -289,8 +286,8 @@ func TestService_Run_MinimalConfig(t *testing.T) {
 		},
 		"cost": {"total_cost_usd": 1.50, "total_duration_ms": 50000},
 		"rate_limits": {
-			"five_hour": {"used_percentage": 30, "resets_at": "2026-07-19T22:30:00Z"},
-			"weekly": {"used_percentage": 20, "resets_at": "2026-07-26T00:00:00Z"}
+			"five_hour": {"used_percentage": 30, "resets_at": 1784586600},
+			"seven_day": {"used_percentage": 20, "resets_at": 1785191400}
 		}
 	}`
 
@@ -332,7 +329,7 @@ func TestService_Run_MinimalConfig(t *testing.T) {
 	}
 
 	// Should contain model, project, rate limit, context
-	if !strings.Contains(output, "S5·200k") {
+	if !strings.Contains(output, "Sonnet 5·200k") {
 		t.Errorf("output missing model: %s", output)
 	}
 	if !strings.Contains(output, "test") {
@@ -372,5 +369,113 @@ func TestService_Run_CustomBarSize(t *testing.T) {
 	}
 	if !strings.Contains(bar, "█") || !strings.Contains(bar, "░") {
 		t.Error("progressBar should contain both filled and empty chars")
+	}
+}
+
+// runWithInput pipes input into svc.Run() and captures whatever it writes to stdout.
+func runWithInput(t *testing.T, svc *Service, input string) (string, error) {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	rOut, wOut, _ := os.Pipe()
+	os.Stdout = wOut
+
+	rIn, wIn, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = rIn
+	go func() {
+		defer wIn.Close()
+		wIn.WriteString(input)
+	}()
+
+	err := svc.Run()
+
+	wOut.Close()
+	os.Stdout = oldStdout
+	os.Stdin = oldStdin
+
+	buf := new(strings.Builder)
+	io.Copy(buf, rOut)
+	return buf.String(), err
+}
+
+// TestService_Run_PartialJSON reproduces the real-world crash: one field
+// arrives as a type the struct doesn't expect (mirrors the actual
+// rate_limits.resets_at bug, where Claude Code sends a number but an older
+// version of this code declared it as a string). Every other field is
+// well-formed and must still render instead of the whole status line going
+// silent over one bad field.
+func TestService_Run_PartialJSON(t *testing.T) {
+	cfg := config.Config{
+		ShowCost:     true,
+		ShowWeekly:   true,
+		ShowTokens:   true,
+		ShowGit:      false,
+		ShowGitDirty: false,
+		BarSize:      10,
+		LimitWarn:    60,
+		LimitCrit:    85,
+		CtxWarn:      60,
+		CtxCrit:      85,
+		WeeklyShowAt: 60,
+	}
+
+	svc := New(cfg)
+
+	input := `{
+		"model": {"display_name": "Sonnet 5", "id": "claude-sonnet-5"},
+		"workspace": {"project_dir": "/home/user/payments-api", "current_dir": "/home/user/payments-api"},
+		"context_window": {
+			"used_percentage": 42,
+			"context_window_size": 200000,
+			"current_usage": {
+				"input_tokens": 1000,
+				"output_tokens": 200,
+				"cache_creation_input_tokens": 0,
+				"cache_read_input_tokens": 0
+			}
+		},
+		"cost": {"total_cost_usd": 3.21, "total_duration_ms": 1000},
+		"rate_limits": {
+			"five_hour": {"used_percentage": 55, "resets_at": "not-a-unix-timestamp"},
+			"seven_day": {"used_percentage": 20, "resets_at": 1785191400}
+		}
+	}`
+
+	output, err := runWithInput(t, svc, input)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	if !strings.Contains(output, "🧠 Sonnet 5·200k") {
+		t.Errorf("output missing model: %s", output)
+	}
+	if !strings.Contains(output, "payments-api") {
+		t.Errorf("output missing project: %s", output)
+	}
+	if !strings.Contains(output, "55%") {
+		t.Errorf("output missing rate limit: %s", output)
+	}
+	if !strings.Contains(output, "42%") {
+		t.Errorf("output missing context: %s", output)
+	}
+	if !strings.Contains(output, "$3.21") {
+		t.Errorf("output missing cost: %s", output)
+	}
+}
+
+// TestService_Run_InvalidJSON confirms totally unparseable stdin still
+// produces a best-effort status line and a nil error rather than aborting
+// with no output, which is what causes Claude Code to blank the status line
+// until restart.
+func TestService_Run_InvalidJSON(t *testing.T) {
+	svc := New(config.DefaultConfig())
+
+	output, err := runWithInput(t, svc, "not json at all")
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if strings.TrimSpace(output) == "" {
+		t.Error("expected a best-effort status line, got empty output")
 	}
 }

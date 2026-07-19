@@ -37,7 +37,7 @@ type Input struct {
 	} `json:"cost"`
 	RateLimits struct {
 		FiveHour RateLimit `json:"five_hour"`
-		Weekly   RateLimit `json:"weekly"`
+		Weekly   RateLimit `json:"seven_day"`
 	} `json:"rate_limits"`
 }
 
@@ -50,7 +50,7 @@ type Usage struct {
 
 type RateLimit struct {
 	UsedPercentage float64 `json:"used_percentage"`
-	ResetsAt       string  `json:"resets_at"`
+	ResetsAt       int64   `json:"resets_at"`
 }
 
 const (
@@ -75,19 +75,20 @@ func New(cfg config.Config) *Service {
 }
 
 func (s *Service) Run() error {
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) != 0 {
+	stat, err := os.Stdin.Stat()
+	if err == nil && (stat.Mode()&os.ModeCharDevice) != 0 {
 		return fmt.Errorf("stdin is a terminal; pipe Claude Code JSON to this tool")
 	}
 
-	data, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return fmt.Errorf("reading stdin: %w", err)
-	}
+	data, _ := io.ReadAll(os.Stdin)
 
 	var input Input
 	if err := json.Unmarshal(data, &input); err != nil {
-		return fmt.Errorf("parsing JSON: %w", err)
+		// encoding/json fills in every field it can decode before hitting
+		// a bad one, so input still holds whatever was parseable. Render
+		// with that instead of blanking the whole status line over one
+		// unexpected or missing field.
+		fmt.Fprintf(os.Stderr, "claude-status-line-go: partial JSON parse: %v\n", err)
 	}
 
 	ctxPercent := int(input.ContextWindow.UsedPercentage)
@@ -172,7 +173,7 @@ func stripANSI(s string) string {
 
 func (s *Service) renderFormat(modelStr, sizeStr string, ctxPercent, limit5 int,
 	ctxBar, limitBar, ctxColor, limitColor string, cost float64, projectName string,
-	tokensIn, tokensOut, tokensCache, weekly int, limit5Reset string) string {
+	tokensIn, tokensOut, tokensCache, weekly int, limit5Reset int64) string {
 
 	branch, dirty := s.getGitInfo()
 	resetIn := timeUntil(limit5Reset)
@@ -211,16 +212,10 @@ func (s *Service) renderFormat(modelStr, sizeStr string, ctxPercent, limit5 int,
 }
 
 func shortModel(model string) string {
-	switch {
-	case strings.Contains(model, "Opus"):
-		return "O4.7"
-	case strings.Contains(model, "Sonnet"):
-		return "S5"
-	case strings.Contains(model, "Haiku"):
-		return "H"
-	default:
-		return model
+	if model == "" {
+		return "Unknown"
 	}
+	return model
 }
 
 func contextSize(size int) string {
@@ -260,17 +255,11 @@ func colorForPercent(pct, warn, crit int) string {
 	return Green
 }
 
-func timeUntil(ts string) string {
-	if ts == "" {
+func timeUntil(unixSeconds int64) string {
+	if unixSeconds == 0 {
 		return ""
 	}
-	t, err := time.Parse(time.RFC3339, ts)
-	if err != nil {
-		t, err = time.Parse("2006-01-02T15:04:05Z07:00", ts)
-		if err != nil {
-			return ""
-		}
-	}
+	t := time.Unix(unixSeconds, 0)
 	diff := time.Until(t)
 	if diff < 0 {
 		diff = 0

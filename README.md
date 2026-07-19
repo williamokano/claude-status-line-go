@@ -5,7 +5,7 @@ Go CLI tool that reads Claude Code JSON from stdin and prints a formatted status
 ## Output Format
 
 ```
-🧠 O4.7·1M │ 📁 payments-api │ 🌿 feature/calendar ●3
+🧠 Opus 4.8·1M │ 📁 payments-api │ 🌿 feature/calendar ●3
 🟡5h ████████░░ 83% ↺22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 7d 74% │ $7.92
 ```
 
@@ -98,7 +98,7 @@ Available placeholders:
 
 | Placeholder | Description |
 |-------------|-------------|
-| `{model}` | Short model name (O4.7, S5, H) |
+| `{model}` | Model name as reported by Claude Code (e.g. Opus 4.8, Sonnet 5) |
 | `{ctx_size}` | Context window size (200k, 1M) |
 | `{project}` | Project folder name |
 | `{branch}` | Git branch name |
