@@ -44,6 +44,12 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestLoad_WithEnvVars(t *testing.T) {
+	// All env vars we test
+	allEnvVars := []string{
+		"SHOW_COST", "SHOW_WEEKLY", "SHOW_TOKENS", "SHOW_GIT", "SHOW_GIT_DIRTY",
+		"BAR_SIZE", "LIMIT_WARN", "LIMIT_CRIT", "CTX_WARN", "CTX_CRIT", "WEEKLY_SHOW_AT",
+	}
+
 	tests := []struct {
 		name     string
 		envVars  map[string]string
@@ -89,9 +95,9 @@ func TestLoad_WithEnvVars(t *testing.T) {
 			expected: DefaultConfig(),
 		},
 		{
-			name:     "invalid bool defaults to false",
+			name:     "invalid bool uses default",
 			envVars:  map[string]string{"SHOW_COST": "invalid"},
-			expected: Config{ShowCost: false, ShowWeekly: true, ShowTokens: true, ShowGit: true, ShowGitDirty: true, BarSize: 10, LimitWarn: 60, LimitCrit: 85, CtxWarn: 60, CtxCrit: 85, WeeklyShowAt: 60},
+			expected: Config{ShowCost: true, ShowWeekly: true, ShowTokens: true, ShowGit: true, ShowGitDirty: true, BarSize: 10, LimitWarn: 60, LimitCrit: 85, CtxWarn: 60, CtxCrit: 85, WeeklyShowAt: 60},
 		},
 		{
 			name:     "invalid int defaults to zero then default",
@@ -102,21 +108,16 @@ func TestLoad_WithEnvVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save original env
+			// Save and clear ALL relevant env vars
 			oldEnv := make(map[string]string)
-			for k := range tt.envVars {
+			for _, k := range allEnvVars {
 				oldEnv[k] = os.Getenv(k)
+				os.Unsetenv(k)
 			}
 
 			// Set test env
 			for k, v := range tt.envVars {
 				os.Setenv(k, v)
-			}
-			// Clear env vars not in test to avoid interference
-			for k := range tt.envVars {
-				if _, ok := tt.envVars[k]; !ok {
-					os.Unsetenv(k)
-				}
 			}
 
 			cfg, err := Load()

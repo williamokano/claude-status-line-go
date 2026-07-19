@@ -1,9 +1,12 @@
 package service
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
 )
@@ -97,8 +100,8 @@ func TestProgressBar(t *testing.T) {
 			if result != tt.expected {
 				t.Errorf("progressBar(%d, %d) = %q, want %q", tt.pct, tt.barSize, result, tt.expected)
 			}
-			if len(result) != tt.barSize {
-				t.Errorf("progressBar length = %d, want %d", len(result), tt.barSize)
+			if utf8.RuneCountInString(result) != tt.barSize {
+				t.Errorf("progressBar length = %d, want %d", utf8.RuneCountInString(result), tt.barSize)
 			}
 		})
 	}
@@ -148,7 +151,6 @@ func TestTimeUntil(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := timeUntil(tt.input)
-			// Just check it returns something reasonable for future
 			if tt.name == "Future time" && result == "" {
 				t.Errorf("timeUntil(%q) = %q, want non-empty", tt.input, result)
 			}
@@ -167,7 +169,7 @@ func TestService_Run(t *testing.T) {
 		ShowCost:     true,
 		ShowWeekly:   true,
 		ShowTokens:   true,
-		ShowGit:      false, // Disable git for testing
+		ShowGit:      false,
 		ShowGitDirty: false,
 		BarSize:      10,
 		LimitWarn:    60,
@@ -199,32 +201,59 @@ func TestService_Run(t *testing.T) {
 		}
 	}`
 
-	// We can't easily test Run() without mocking stdin, but we can test
-	// the parsing logic by calling the internal methods
-	// For now just verify the service creates correctly
-	if svc == nil {
-		t.Error("New() returned nil")
+	oldStdout := os.Stdout
+	rOut, wOut, _ := os.Pipe()
+	os.Stdout = wOut
+
+	rIn, wIn, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = rIn
+	go func() {
+		defer wIn.Close()
+		wIn.WriteString(input)
+	}()
+
+	err := svc.Run()
+
+	wOut.Close()
+	os.Stdout = oldStdout
+	os.Stdin = oldStdin
+
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
 	}
 
-	// Test parsing by checking the types
-	var parsed Input
-	if err := parseJSON(input, &parsed); err != nil {
-		t.Fatalf("parseJSON failed: %v", err)
-	}
+	buf := new(strings.Builder)
+	io.Copy(buf, rOut)
+	output := buf.String()
 
-	if parsed.Model.DisplayName != "Opus 4.7" {
-		t.Errorf("Model.DisplayName = %q, want %q", parsed.Model.DisplayName, "Opus 4.7")
+	if !strings.Contains(output, "🧠 O4.7·1M") {
+		t.Errorf("output missing model: %s", output)
 	}
-	if parsed.Workspace.ProjectDir != "/home/user/payments-api" {
-		t.Errorf("Workspace.ProjectDir = %q, want %q", parsed.Workspace.ProjectDir, "/home/user/payments-api")
+	if !strings.Contains(output, "payments-api") {
+		t.Errorf("output missing project: %s", output)
 	}
-	if parsed.ContextWindow.UsedPercentage != 68 {
-		t.Errorf("ContextWindow.UsedPercentage = %v, want 68", parsed.ContextWindow.UsedPercentage)
+	if !strings.Contains(output, "5h") {
+		t.Errorf("output missing rate limit: %s", output)
 	}
-}
-
-func parseJSON(data string, v interface{}) error {
-	return json.Unmarshal([]byte(data), v)
+	if !strings.Contains(output, "CTX") {
+		t.Errorf("output missing context: %s", output)
+	}
+	if !strings.Contains(output, "I420k") {
+		t.Errorf("output missing input tokens: %s", output)
+	}
+	if !strings.Contains(output, "O77k") {
+		t.Errorf("output missing output tokens: %s", output)
+	}
+	if !strings.Contains(output, "⚡2.3M") {
+		t.Errorf("output missing cache tokens: %s", output)
+	}
+	if !strings.Contains(output, "7d 74%") {
+		t.Errorf("output missing weekly: %s", output)
+	}
+	if !strings.Contains(output, "$7.92") {
+		t.Errorf("output missing cost: %s", output)
+	}
 }
 
 // Test with minimal config (no tokens, no weekly, no cost)
@@ -244,19 +273,76 @@ func TestService_Run_MinimalConfig(t *testing.T) {
 	}
 
 	svc := New(cfg)
-	if svc == nil {
-		t.Error("New() returned nil")
+
+	input := `{
+		"model": {"display_name": "Sonnet 3.5", "id": "sonnet-3.5"},
+		"workspace": {"project_dir": "/home/user/test", "current_dir": "/home/user/test"},
+		"context_window": {
+			"used_percentage": 50,
+			"context_window_size": 200000,
+			"current_usage": {
+				"input_tokens": 100000,
+				"output_tokens": 50000,
+				"cache_creation_input_tokens": 0,
+				"cache_read_input_tokens": 0
+			}
+		},
+		"cost": {"total_cost_usd": 1.50, "total_duration_ms": 50000},
+		"rate_limits": {
+			"five_hour": {"used_percentage": 30, "resets_at": "2026-07-19T22:30:00Z"},
+			"weekly": {"used_percentage": 20, "resets_at": "2026-07-26T00:00:00Z"}
+		}
+	}`
+
+	oldStdout := os.Stdout
+	rOut, wOut, _ := os.Pipe()
+	os.Stdout = wOut
+
+	rIn, wIn, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = rIn
+	go func() {
+		defer wIn.Close()
+		wIn.WriteString(input)
+	}()
+
+	err := svc.Run()
+
+	wOut.Close()
+	os.Stdout = oldStdout
+	os.Stdin = oldStdin
+
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
 	}
 
-	// Check that the config is properly set
-	if svc.cfg.ShowCost {
-		t.Error("ShowCost should be false")
+	buf := new(strings.Builder)
+	io.Copy(buf, rOut)
+	output := buf.String()
+
+	// Should not contain tokens, weekly, or cost
+	if strings.Contains(output, "I100k") {
+		t.Errorf("output should not contain tokens: %s", output)
 	}
-	if svc.cfg.ShowTokens {
-		t.Error("ShowTokens should be false")
+	if strings.Contains(output, "7d") {
+		t.Errorf("output should not contain weekly: %s", output)
 	}
-	if svc.cfg.ShowWeekly {
-		t.Error("ShowWeekly should be false")
+	if strings.Contains(output, "$1.50") {
+		t.Errorf("output should not contain cost: %s", output)
+	}
+
+	// Should contain model, project, rate limit, context
+	if !strings.Contains(output, "S5·200k") {
+		t.Errorf("output missing model: %s", output)
+	}
+	if !strings.Contains(output, "test") {
+		t.Errorf("output missing project: %s", output)
+	}
+	if !strings.Contains(output, "30%") {
+		t.Errorf("output missing rate limit: %s", output)
+	}
+	if !strings.Contains(output, "CTX") {
+		t.Errorf("output missing context: %s", output)
 	}
 }
 
@@ -281,8 +367,8 @@ func TestService_Run_CustomBarSize(t *testing.T) {
 	}
 
 	bar := progressBar(50, svc.cfg.BarSize)
-	if len(bar) != 20 {
-		t.Errorf("progressBar length = %d, want 20", len(bar))
+	if utf8.RuneCountInString(bar) != 20 {
+		t.Errorf("progressBar length = %d, want 20", utf8.RuneCountInString(bar))
 	}
 	if !strings.Contains(bar, "█") || !strings.Contains(bar, "░") {
 		t.Error("progressBar should contain both filled and empty chars")
