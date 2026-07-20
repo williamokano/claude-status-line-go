@@ -90,6 +90,9 @@ func (s *Service) Run() error {
 		// with that instead of blanking the whole status line over one
 		// unexpected or missing field.
 		fmt.Fprintf(os.Stderr, "claude-status-line-go: partial JSON parse: %v\n", err)
+		if path, dumpErr := dumpFailedInput(data); dumpErr == nil {
+			fmt.Fprintf(os.Stderr, "claude-status-line-go: raw input saved to %s\n", path)
+		}
 	}
 
 	ctxPercent := int(math.Round(input.ContextWindow.UsedPercentage))
@@ -166,6 +169,27 @@ func (s *Service) Run() error {
 
 	fmt.Println(out)
 	return nil
+}
+
+// failedInputPrefix names the debug dumps written when stdin fails to parse:
+// <tmpdir>/claude-status-line-go-parse-fail-<timestamp>-<rand>.json
+const failedInputPrefix = "claude-status-line-go-parse-fail-"
+
+// dumpFailedInput saves the raw stdin payload that failed to parse so it can
+// be inspected later. The dump must never take the status line down with it,
+// so callers treat a returned error as log-and-move-on.
+func dumpFailedInput(data []byte) (string, error) {
+	pattern := failedInputPrefix + time.Now().Format("20060102-150405") + "-*.json"
+	f, err := os.CreateTemp("", pattern)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Write(data); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 func stripANSI(s string) string {

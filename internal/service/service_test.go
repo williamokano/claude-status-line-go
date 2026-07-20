@@ -3,6 +3,7 @@ package service
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -477,5 +478,36 @@ func TestService_Run_InvalidJSON(t *testing.T) {
 	}
 	if strings.TrimSpace(output) == "" {
 		t.Error("expected a best-effort status line, got empty output")
+	}
+}
+
+// TestService_Run_DumpsFailedInput verifies that unparseable stdin is saved
+// to the temp dir under a recognizable name so the payload can be inspected
+// after the fact.
+func TestService_Run_DumpsFailedInput(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+
+	svc := New(config.DefaultConfig())
+	raw := `{"model": {"display_name": 123}} trailing garbage`
+
+	if _, err := runWithInput(t, svc, raw); err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(tmp, failedInputPrefix+"*.json"))
+	if err != nil {
+		t.Fatalf("glob error: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("expected exactly one dump file, got %d: %v", len(matches), matches)
+	}
+
+	content, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatalf("reading dump file: %v", err)
+	}
+	if string(content) != raw {
+		t.Errorf("dump content = %q, want the raw stdin payload %q", content, raw)
 	}
 }
