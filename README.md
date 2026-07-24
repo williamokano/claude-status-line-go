@@ -29,6 +29,22 @@ make build
 
 ### As Claude Code Status Line
 
+#### Automatic (recommended)
+
+```bash
+claude-status-line-go install
+```
+
+This registers the binary as the `statusLine` command in `~/.claude/settings.json`,
+preserving any other settings already in that file. Use `--project` to register it
+in the current project's `.claude/settings.json` instead:
+
+```bash
+claude-status-line-go install --project
+```
+
+#### Manual
+
 Add to your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
 
 ```json
@@ -46,7 +62,11 @@ Add to your Claude Code settings (`~/.claude/settings.json` or project `.claude/
 echo '{"model":...}' | claude-status-line-go
 ```
 
-## CLI Flags
+## CLI Commands & Flags
+
+| Command | Description |
+|---------|-------------|
+| `install` | Register this binary as the Claude Code status line |
 
 | Flag | Description |
 |------|-------------|
@@ -54,6 +74,7 @@ echo '{"model":...}' | claude-status-line-go
 | `-v, --version` | Print version |
 | `--no-color` | Disable ANSI color output |
 | `--completion bash\|zsh\|fish` | Print shell completion script |
+| `--project` | With `install`: register in `./.claude/settings.json` instead of the global settings |
 
 ## Environment Variables
 
