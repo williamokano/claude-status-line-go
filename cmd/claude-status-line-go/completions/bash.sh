@@ -4,7 +4,7 @@ _claude_status_line_go()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="-h --help -v --version --no-color --completion"
+    opts="-h --help -v --version --no-color --completion --project install"
 
     case "${prev}" in
         --completion)

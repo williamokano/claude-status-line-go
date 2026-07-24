@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
+	"github.com/williamokano/claude-status-line-go/internal/installer"
 	"github.com/williamokano/claude-status-line-go/internal/service"
 )
 
@@ -62,6 +63,7 @@ func main() {
 	help := flag.BoolP("help", "h", false, "print help and exit")
 	noColor := flag.Bool("no-color", false, "disable ANSI color output")
 	completion := flag.String("completion", "", "print shell completion script (bash|zsh|fish)")
+	project := flag.Bool("project", false, "with install: register in ./.claude/settings.json instead of the global settings")
 
 	flag.Parse()
 
@@ -77,6 +79,11 @@ func main() {
 
 	if *completion != "" {
 		printCompletion(*completion)
+		os.Exit(0)
+	}
+
+	if flag.Arg(0) == "install" {
+		runInstall(*project)
 		os.Exit(0)
 	}
 
@@ -97,16 +104,42 @@ func main() {
 	}
 }
 
+func runInstall(project bool) {
+	res, err := installer.Install(installer.Options{Project: project})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Install error: %v\n", err)
+		os.Exit(1)
+	}
+
+	scope := "global"
+	if project {
+		scope = "project"
+	}
+
+	fmt.Printf("✓ Registered claude-status-line-go as the %s Claude Code status line\n", scope)
+	fmt.Printf("  settings: %s\n", res.SettingsPath)
+	fmt.Printf("  command:  %s\n", res.BinPath)
+	if res.Replaced {
+		fmt.Println("  (replaced an existing statusLine configuration)")
+	}
+}
+
 func printUsage() {
 	fmt.Fprintf(os.Stderr, `Usage: claude-status-line-go [options]
+       claude-status-line-go install [--project]
 
 Reads Claude Code JSON from stdin and prints a formatted status line.
+
+Commands:
+  install              register this binary as the Claude Code status line
+                       by writing it into ~/.claude/settings.json
 
 Options:
   -h, --help              print this help
   -v, --version           print version
       --no-color          disable ANSI color output (also via NO_COLOR env)
       --completion SHELL  print completion script (bash, zsh, fish)
+      --project           with install: use ./.claude/settings.json instead of global
 
 Environment variables:
   CSL_SHOW_COST           show session cost (default: true)
