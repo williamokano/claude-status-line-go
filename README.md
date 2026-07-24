@@ -6,7 +6,7 @@ Go CLI tool that reads Claude Code JSON from stdin and prints a formatted status
 
 ```
 🧠 Opus 4.8·1M │ 📁 payments-api │ 🌿 feature/calendar ●3
-🟡5h ████████░░ 83% ↺22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 7d 74% │ $7.92
+🟡5h ████████░░ 83% ↺ 22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 7d 74% │ $7.92
 ```
 
 ## Installation

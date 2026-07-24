@@ -139,7 +139,7 @@ func (s *Service) Run() error {
 
 	resetIn := timeUntil(limit5Reset)
 	if resetIn != "" {
-		bottom += fmt.Sprintf(" ↺%s", resetIn)
+		bottom += fmt.Sprintf(" ↺ %s", resetIn)
 	}
 
 	bottom += fmt.Sprintf("%s %s│ %sCTX %s %d%%%s", Reset, Dim, ctxColor, ctxBar, ctxPercent, Reset)
