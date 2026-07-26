@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plugins — claude-status-line-go</title>
+<meta name="description" content="Add your own segments to the Claude Code status line. A plugin reports data and the tool draws it, so your segment matches the built-in ones.">
+<meta property="og:title" content="Plugins — claude-status-line-go">
+<meta property="og:description" content="Add your own segments. A plugin reports data and the tool draws it — same bars, same colors, same widths as the built-in segments.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://okano.dev/claude-status-line-go/plugins/">
+<meta property="og:site_name" content="claude-status-line-go">
+<meta property="og:image" content="https://okano.dev/claude-status-line-go/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Claude Code status line on a dark terminal, showing model, project, branch, rate-limit bars and session cost.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://okano.dev/claude-status-line-go/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F1319'/%3E%3Crect x='5' y='13' width='7' height='6' fill='%234FD6C8'/%3E%3Crect x='13.5' y='13' width='7' height='6' fill='%237FD88F'/%3E%3Crect x='22' y='13' width='5' height='6' fill='%23263039'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__in">
+    <a class="nav__mark" href="../"><span>▚</span>claude-status-line-go</a>
+    <div class="nav__links">
+      <a href="../#anatomy" class="is-hidden-xs">Anatomy</a>
+      <a href="../#thresholds" class="is-hidden-sm">Thresholds</a>
+      <a href="../#configure" class="is-hidden-sm">Configure</a>
+      <a href="./" class="is-hidden-xs" aria-current="page">Plugins</a>
+      <a href="../#install">Install</a>
+      <a href="https://github.com/williamokano/claude-status-line-go">GitHub&nbsp;↗</a>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+  <section class="section section--first" id="plugins">
+    <div class="wrap">
+      <p class="eyebrow">Plugins</p>
+      <h2 class="reveal">Add your own&nbsp;segments.</h2>
+      <p class="note reveal">
+        A plugin reports data — a value, an optional maximum, maybe a label — and
+        this tool draws it. So your segment gets the same glyphs, the same
+        <code style="font-family:var(--font-mono)">bar_size</code> and the same
+        <code style="font-family:var(--font-mono)">NO_COLOR</code> handling as
+        everything else on the line, rather than each plugin reinventing bars and
+        colors slightly differently.
+      </p>
+
+      <div class="sl reveal" style="margin-top:2.5rem;max-width:56rem">
+        <div class="sl__bar"><span>Open issues, via a plugin</span></div>
+        <div class="sl__body">
+          <div class="sl__scroll">
+            <p class="sl__line"><span class="cy">🧠 Opus 5·1M</span><span class="dim"> │ 📁 claude-status-line-go │ 🌿 main</span></p>
+            <p class="sl__line"><span class="ok">🟡5h ████░░░░░░ 41% ↺ 3h2m</span><span class="dim"> │ </span><span class="ok">CTX ███░░░░░░░ 32%</span><span class="dim"> │ </span><span class="ok">🎯 ███░░░░░░░ 31/100</span><span class="dim"> │ </span><span class="money">$2.14</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ways reveal">
+        <div class="way">
+          <p class="way__label">From a command</p>
+          <div class="code">
+            <div class="code__bar"><span>claude-status-line.yaml</span></div>
+<pre><span class="k">plugins</span>:
+  - <span class="k">name</span>: <span class="v">issues</span>
+    <span class="k">command</span>: <span class="c">&gt;-</span>
+      <span class="s">printf '{"value":%s,"max":100}'</span>
+      <span class="s">"$(gh issue list --json number --jq 'length')"</span>
+    <span class="k">interval</span>: <span class="v">60s</span>
+    <span class="k">icon</span>: <span class="s">"🎯"</span>
+    <span class="k">bar</span>: <span class="v">true</span>
+    <span class="k">thresholds</span>:
+      - { <span class="k">at</span>: <span class="v">0</span>,  <span class="k">color</span>: <span class="v">green</span> }
+      - { <span class="k">at</span>: <span class="v">40</span>, <span class="k">color</span>: <span class="v">yellow</span> }
+      - { <span class="k">at</span>: <span class="v">70</span>, <span class="k">color</span>: <span class="v">red</span> }</pre>
+          </div>
+          <p class="way__note">
+            A command never runs while the status line is drawing. Its result is
+            cached; a render reads that and, when it's older than
+            <code>interval</code>, hands the work to a detached process and draws
+            the stale value straight away. A 350&nbsp;ms
+            <code>gh</code> call costs the line nothing — it just means the number
+            can be up to <code>interval</code> old.
+          </p>
+          <p class="way__note">
+            <code>thresholds</code> is a list, and <code>at</code> is a lower bound
+            in percent. There's no invert flag: for a ramp where more is better,
+            write the colors the other way round.
+          </p>
+        </div>
+
+        <div class="way">
+          <p class="way__label">From a file</p>
+          <div class="code">
+            <div class="code__bar"><span>claude-status-line.yaml</span></div>
+<pre><span class="k">plugins</span>:
+  - <span class="k">name</span>: <span class="v">spec</span>
+    <span class="k">file</span>: <span class="v">.claude/spec-state.json</span>
+    <span class="k">icon</span>: <span class="s">"🧩"</span>
+    <span class="k">bar</span>: <span class="v">true</span>
+    <span class="k">display</span>: <span class="s">"{icon} {label} {bar} {value}/{max}"</span>
+    <span class="k">hide_when</span>: <span class="v">zero</span>   <span class="c"># nothing left to do, so say nothing</span></pre>
+          </div>
+          <p class="way__note">
+            Read straight off disk, so it costs nothing at all. This is the one to
+            reach for when something already writes the data — a Claude Code hook
+            firing on the event that changes it beats polling for it.
+          </p>
+          <p class="way__note">
+            <code>hide_when</code> keeps counters out of the way when they've
+            nothing to say: <code>zero</code> when the value is 0,
+            <code>full</code> when it reaches its maximum.
+          </p>
+        </div>
+      </div>
+
+      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
+        <p class="way__label">What a slow command actually does</p>
+        <p class="way__note" style="margin-top:0">
+          Five consecutive renders with a command that takes 800&nbsp;ms, timed on
+          a real terminal. The command never lands on the render path, so the cost
+          of the status line doesn't move.
+        </p>
+
+        <div style="margin-top:1.4rem">
+          <div class="seg">
+            <div class="seg__code"><span class="dim">1 ·</span> <span class="ok">4 ms</span> <span class="dim">· (nothing)</span></div>
+            <div>
+              <p class="seg__name">Cold</p>
+              <p class="seg__text">No cached value, so no segment. The render hands the command to a detached process and exits without waiting.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">2 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
+            <div>
+              <p class="seg__name">First value</p>
+              <p class="seg__text">The background run finished, so the cache has something to draw.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">3 ·</span> <span class="ok">3 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
+            <div>
+              <p class="seg__name">Fresh</p>
+              <p class="seg__text">Inside <code>interval</code>, so nothing is spawned at all — this is a file read and no more.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">4 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
+            <div>
+              <p class="seg__name">Stale</p>
+              <p class="seg__text">Past <code>interval</code>. The <em>old</em> value is drawn immediately and a refresh starts behind it — you never wait 800&nbsp;ms for a number.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">5 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 ██░░░░░░░░ 2/10</div>
+            <div>
+              <p class="seg__name">Caught up</p>
+              <p class="seg__text">The refresh landed, so the next render shows it. The trade is that a number can be up to <code>interval</code> old — never that the line is slow.</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="way__note">
+          If the command fails, the last good value stays on screen rather than the
+          segment vanishing. If it has never succeeded, there's simply nothing to draw.
+        </p>
+      </div>
+
+      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
+        <p class="way__label">A real one, start to finish</p>
+        <p class="way__note" style="margin-top:0">
+          Commits you haven't pushed. No API tokens, no setup — it works in any git
+          repo, and <code>hide_when: zero</code> means it's invisible until you're
+          actually behind.
+        </p>
+        <div class="code" style="margin-top:1.4rem">
+          <div class="code__bar">
+            <span>claude-status-line.yaml</span>
+            <button class="code__copy" type="button" data-copy-from="#recipe-unpushed">Copy</button>
+          </div>
+<pre id="recipe-unpushed"><span class="k">plugins</span>:
+  - <span class="k">name</span>: <span class="v">unpushed</span>
+    <span class="k">command</span>: <span class="c">&gt;-</span>
+      <span class="s">printf '{"value":%s,"max":20,"label":"unpushed"}'</span>
+      <span class="s">"$(git log --oneline @{u}.. 2&gt;/dev/null | wc -l)"</span>
+    <span class="k">interval</span>: <span class="v">30s</span>
+    <span class="k">icon</span>: <span class="s">"⬆"</span>
+    <span class="k">bar</span>: <span class="v">true</span>
+    <span class="k">hide_when</span>: <span class="v">zero</span>
+    <span class="k">thresholds</span>:
+      - { <span class="k">at</span>: <span class="v">0</span>,  <span class="k">color</span>: <span class="v">green</span> }
+      - { <span class="k">at</span>: <span class="v">25</span>, <span class="k">color</span>: <span class="v">yellow</span> }
+      - { <span class="k">at</span>: <span class="v">50</span>, <span class="k">color</span>: <span class="v">red</span> }</pre>
+        </div>
+        <div class="sl" style="margin-top:1.4rem">
+          <div class="sl__bar"><span>Three commits behind, then in sync</span></div>
+          <div class="sl__body">
+            <div class="sl__scroll">
+              <p class="sl__line"><span class="ok">🟡5h ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">CTX ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">⬆ █░░░░░░░░░ 3/20</span><span class="dim"> │ </span><span class="money">$0.00</span></p>
+              <p class="sl__line"><span class="ok">🟡5h ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">CTX ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="money">$0.00</span></p>
+            </div>
+          </div>
+        </div>
+        <p class="way__note">
+          The second line is the same plugin after pushing: at zero it takes no
+          space at all. Outside a git repo, or on a branch with no upstream, the
+          count is zero and the segment stays hidden — no error, no noise.
+        </p>
+      </div>
+
+      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
+        <p class="way__label">When one doesn't show up</p>
+        <div class="cmds" style="margin-top:0;max-width:34rem">
+          <div class="cmd">
+            <span class="cmd__prompt" aria-hidden="true">$</span>
+            <code class="cmd__text">claude-status-line-go plugins</code>
+            <button class="cmd__copy" type="button" data-copy="claude-status-line-go plugins">Copy</button>
+          </div>
+        </div>
+        <p class="way__note">
+          Claude Code discards this tool's stderr, so a plugin that fails has
+          nowhere to say so — it just doesn't appear. This prints each plugin's
+          source, cache age and the segment it renders.
+          <code>plugins refresh</code> runs the commands in the foreground and
+          shows you the error.
+        </p>
+        <p class="way__note">
+          Cached values are per plugin and per project, so they build up as you
+          move between repos. Every background refresh prunes the ones that can't
+          matter any more — plugins you've removed, anything untouched for a
+          fortnight — and <code>plugins clean</code> does it on demand.
+        </p>
+      </div>
+
+      <p class="note note--sm reveal" style="margin-top:2.75rem">
+        A plugin emits JSON on stdout —
+        <code style="font-family:var(--font-mono);font-size:.85em">{"value": 12, "max": 33, "label": "aplicar"}</code>
+        — and bare text counts too, so <code style="font-family:var(--font-mono)">echo "12 left"</code>
+        is a valid plugin. Any key outside the contract is reachable as
+        <code style="font-family:var(--font-mono)">{plugin.name.key}</code>, which is how
+        one plugin reports several things at once.
+      </p>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
+
+  <section class="section" id="next">
+    <div class="wrap">
+      <p class="eyebrow">Next</p>
+      <h2 class="reveal">Not installed&nbsp;yet?</h2>
+      <p class="note reveal">
+        Plugins live in the same config file as everything else, so there's
+        nothing extra to set up once the status line itself is running.
+      </p>
+      <div class="cmds reveal" style="max-width:34rem">
+        <div class="cmd">
+          <span class="cmd__prompt" aria-hidden="true">$</span>
+          <code class="cmd__text">curl -fsSL https://okano.dev/claude-status-line-go/install.sh | sh</code>
+          <button class="cmd__copy" type="button" data-copy="curl -fsSL https://okano.dev/claude-status-line-go/install.sh | sh">Copy</button>
+        </div>
+      </div>
+      <p class="note note--sm reveal" style="margin-top:1.75rem">
+        <a href="../">← Back to the overview</a>
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <p>MIT · <a href="https://github.com/williamokano/claude-status-line-go">github.com/williamokano/claude-status-line-go</a></p>
+    <p>Built in Go</p>
+  </div>
+</footer>
+<script src="../app.js"></script>
+</body>
+</html>
