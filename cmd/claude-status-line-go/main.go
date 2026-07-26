@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -66,6 +67,7 @@ func main() {
 	noColor := flag.Bool("no-color", false, "disable ANSI color output")
 	completion := flag.String("completion", "", "print shell completion script (bash|zsh|fish)")
 	project := flag.Bool("project", false, "with install: register in ./.claude/settings.json instead of the global settings")
+	force := flag.Bool("force", false, "with config init: overwrite an existing config file")
 
 	// Not for people to type: a render spawns this to refresh one plugin's
 	// cache out of band, so the command never runs on the render path.
@@ -102,6 +104,10 @@ func main() {
 		os.Exit(runPlugins(flag.Args()[1:]))
 	}
 
+	if flag.Arg(0) == "config" {
+		os.Exit(runConfig(flag.Args()[1:], *force))
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
@@ -116,6 +122,50 @@ func main() {
 	if err := svc.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// runConfig handles `config path` and `config init`. The status line itself
+// never writes this file: it runs on every render, in every project, sometimes
+// from several windows at once, so creating files as a side effect of drawing
+// would be surprising and racy. Ask for it instead.
+func runConfig(args []string, force bool) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: claude-status-line-go config path|init [--force]")
+		return 1
+	}
+
+	switch args[0] {
+	case "path":
+		// Bare, on stdout, so it composes: nvim $(claude-status-line-go config path)
+		path := config.Path()
+		if path == "" {
+			fmt.Fprintln(os.Stderr, "Could not work out a config directory; set XDG_CONFIG_HOME")
+			return 1
+		}
+		fmt.Println(path)
+		return 0
+
+	case "init":
+		path, err := config.Init(force)
+		switch {
+		case errors.Is(err, config.ErrExists):
+			fmt.Fprintf(os.Stderr, "Config already exists: %s\n", path)
+			fmt.Fprintln(os.Stderr, "Edit it, or pass --force to replace it with the defaults.")
+			return 1
+		case err != nil:
+			fmt.Fprintf(os.Stderr, "Could not create the config file: %v\n", err)
+			return 1
+		}
+		fmt.Printf("✓ Wrote the default config\n")
+		fmt.Printf("  %s\n\n", path)
+		fmt.Printf("Everything in it is already the default, so nothing changes until you edit it.\n")
+		fmt.Printf("Open it with:  nvim $(claude-status-line-go config path)\n")
+		return 0
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown: config %s (try: config path, config init)\n", args[0])
+		return 1
 	}
 }
 
@@ -329,6 +379,10 @@ Commands:
                        report any errors
   plugins clean        drop cached values for plugins that are no longer
                        configured, and any untouched for over two weeks
+  config path          print the config file path, so it composes:
+                         nvim $(claude-status-line-go config path)
+  config init [--force]
+                       write the commented default config, ready to edit
 
 Options:
   -h, --help              print this help
