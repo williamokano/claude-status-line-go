@@ -43,6 +43,21 @@ weekly_show_at: 60           # Show weekly usage when >= this %
 # Any key the contract doesn't define is reachable as {plugin.<name>.<key>},
 # which is how one plugin reports several things.
 #
+# A command source never runs on the render path. The render reads a cached
+# value and, if it's older than `interval`, hands the work to a detached
+# process and draws the stale value immediately. So a 350ms `gh` call costs
+# the status line nothing — it just means the number can be up to `interval`
+# old. The command gets the session JSON on stdin and runs in the project
+# directory, with CSL_PROJECT_DIR and CSL_PLUGIN_NAME set.
+#
+# plugins:
+#   - name: issues
+#     command: "printf '{\"value\":%s,\"max\":100}' \"$(gh issue list --json number --jq 'length')\""
+#     interval: 60s                   # how long a cached value stays fresh (default 60s)
+#     timeout: 5s                     # caps one run of the command (default 5s)
+#     icon: "🎯"
+#     bar: true
+#
 # plugins:
 #   - name: spec
 #     file: .claude/spec-state.json   # read at render time, costs nothing

@@ -14,9 +14,13 @@ import (
 // stubLoader swaps loadPlugin for the duration of a test.
 func stubLoader(t *testing.T, fn func(plugin.Spec) (plugin.Output, error)) {
 	t.Helper()
-	orig := loadPlugin
-	loadPlugin = fn
-	t.Cleanup(func() { loadPlugin = orig })
+	origResolve, origSpawn := resolvePlugin, spawnRefresh
+	resolvePlugin = func(spec plugin.Spec, _ string) (plugin.Output, bool, error) {
+		out, err := fn(spec)
+		return out, false, err
+	}
+	spawnRefresh = func(string, string, []byte) error { return nil }
+	t.Cleanup(func() { resolvePlugin, spawnRefresh = origResolve, origSpawn })
 }
 
 func specs(names ...string) []plugin.Spec {
@@ -43,7 +47,7 @@ func TestBuildPluginsRunsConcurrently(t *testing.T) {
 	svc := New(config.Config{BarSize: 10, Plugins: specs("a", "b", "c", "d", "e")})
 
 	start := time.Now()
-	got := svc.buildPlugins()
+	got := svc.buildPlugins("")
 	elapsed := time.Since(start)
 
 	if len(got) != n {
@@ -72,7 +76,7 @@ func TestBuildPluginsPreservesDeclarationOrder(t *testing.T) {
 
 	svc := New(config.Config{BarSize: 10, Plugins: specs("first", "mid", "last")})
 
-	got := svc.buildPlugins()
+	got := svc.buildPlugins("")
 	want := []string{"first", "mid", "last"}
 	if len(got) != len(want) {
 		t.Fatalf("got %d segments, want %d", len(got), len(want))
@@ -92,7 +96,7 @@ func TestBuildPluginsLoadsEachSpecExactlyOnce(t *testing.T) {
 	})
 
 	svc := New(config.Config{BarSize: 10, Plugins: specs("a", "b", "c")})
-	svc.buildPlugins()
+	svc.buildPlugins("")
 
 	if got := calls.Load(); got != 3 {
 		t.Errorf("loader called %d times, want 3", got)
@@ -110,7 +114,7 @@ func TestBuildPluginsIsolatesFailures(t *testing.T) {
 
 	svc := New(config.Config{BarSize: 10, Plugins: specs("good", "bad", "alsogood")})
 
-	got := svc.buildPlugins()
+	got := svc.buildPlugins("")
 	if len(got) != 2 {
 		t.Fatalf("got %d segments, want 2", len(got))
 	}
@@ -132,14 +136,14 @@ func TestBuildPluginsDropsHiddenAndEmpty(t *testing.T) {
 
 	svc := New(config.Config{BarSize: 10, Plugins: specs("hidden", "shown", "empty")})
 
-	got := svc.buildPlugins()
+	got := svc.buildPlugins("")
 	if len(got) != 1 || got[0].name != "shown" {
 		t.Fatalf("got %+v, want only the shown segment", got)
 	}
 }
 
 func TestBuildPluginsNoneConfigured(t *testing.T) {
-	if got := New(config.Config{BarSize: 10}).buildPlugins(); got != nil {
+	if got := New(config.Config{BarSize: 10}).buildPlugins(""); got != nil {
 		t.Errorf("got %+v, want nil", got)
 	}
 }
