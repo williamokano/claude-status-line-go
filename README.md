@@ -230,6 +230,52 @@ plugins:
 … │ Σ115k ↓277 ⚡99% │ 🎯 ███░░░░░░░ 31/100 │ $7.92
 ```
 
+### A real one, start to finish
+
+Commits you haven't pushed. No API tokens and no setup — it works in any git
+repo, and `hide_when: zero` keeps it invisible until you're actually behind.
+
+```yaml
+plugins:
+  - name: unpushed
+    command: >-
+      printf '{"value":%s,"max":20,"label":"unpushed"}'
+      "$(git log --oneline @{u}.. 2>/dev/null | wc -l)"
+    interval: 30s
+    icon: "⬆"
+    bar: true
+    hide_when: zero
+    thresholds:
+      - { at: 0,  color: green }
+      - { at: 25, color: yellow }
+      - { at: 50, color: red }
+```
+
+```
+🟡5h ░░░░░░░░░░ 0% │ CTX ░░░░░░░░░░ 0% │ ⬆ █░░░░░░░░░ 3/20 │ $0.00
+🟡5h ░░░░░░░░░░ 0% │ CTX ░░░░░░░░░░ 0% │ $0.00
+```
+
+The second line is the same plugin after pushing. Outside a git repo, or on a
+branch with no upstream, the count is zero and the segment stays hidden — no
+error and no noise.
+
+### What a slow command actually does
+
+Five consecutive renders with a command that takes 800 ms:
+
+| Render | Time | Segment | What happened |
+|--------|------|---------|---------------|
+| 1 | 4 ms | *(nothing)* | No cached value. The render hands the command to a detached process and exits without waiting |
+| 2 | 5 ms | `🧩 █░░░░░░░░░ 1/10` | The background run finished, so there's something to draw |
+| 3 | 3 ms | `🧩 █░░░░░░░░░ 1/10` | Inside `interval` — nothing is spawned, this is a file read and no more |
+| 4 | 5 ms | `🧩 █░░░░░░░░░ 1/10` | Past `interval`. The **old** value is drawn at once and a refresh starts behind it |
+| 5 | 5 ms | `🧩 ██░░░░░░░░ 2/10` | The refresh landed |
+
+The trade is that a number can be up to `interval` old — never that the status
+line is slow. If the command fails, the last good value stays on screen rather
+than the segment vanishing; if it has never succeeded, there's nothing to draw.
+
 ### Sources
 
 | Key | Description |
