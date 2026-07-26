@@ -6,8 +6,15 @@ Go CLI tool that reads Claude Code JSON from stdin and prints a formatted status
 
 ```
 🧠 Opus 4.8·1M │ 📁 payments-api │ 🌿 feature/calendar ●3
-🟡5h ████████░░ 83% ↺ 22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 📅7d ███████░░░ 74% ↺ 2d4h │ $7.92
+🟡5h ████████░░ 83% ↺ 22m │ CTX ██████░░░░ 68% │ Σ115k ↓277 ⚡99% │ 📅7d ███████░░░ 74% ↺ 2d4h │ $7.92
 ```
+
+The token segment reads: `Σ` total prompt size, `↓` tokens generated, `⚡` share of
+the prompt served from the cache. `Σ` is the sum of all three input fields Claude
+Code reports — `input_tokens` counts only the part that *missed* the cache, so on a
+warm conversation it can be a couple of tokens while the real prompt is 100k+.
+`⚡` counts cache **reads** only; a cold turn that writes 48k to the cache reports
+0%, because those tokens were billed at a premium rather than served cheaply.
 
 Both rate-limit windows render the same way — icon, progress bar, percentage and
 time until reset — and share the `limit_warn` / `limit_crit` color thresholds.
@@ -136,9 +143,11 @@ Available placeholders:
 | `{ctx_bar}` | Context progress bar |
 | `{ctx_pct}` | Context percentage |
 | `{ctx_color}` | Context color ANSI code |
-| `{tokens_in}` | Input tokens (42k, 2.3M) |
+| `{tokens_total}` | Total prompt tokens — uncached + cache creation + cache read |
 | `{tokens_out}` | Output tokens |
-| `{tokens_cache}` | Cache tokens |
+| `{cache_hit_pct}` | Share of the prompt served from cache (cache reads / total) |
+| `{tokens_in}` | Uncached input tokens only — the part that missed the cache |
+| `{tokens_cache}` | Cache tokens (creation + read) |
 | `{cost}` | Session cost |
 | `{weekly_bar}` | Weekly usage progress bar |
 | `{weekly_pct}` | Weekly usage percentage |

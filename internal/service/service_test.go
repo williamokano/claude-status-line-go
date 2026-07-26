@@ -111,6 +111,33 @@ func TestProgressBar(t *testing.T) {
 	}
 }
 
+// TestCacheHitPercent pins the token accounting: input_tokens is only the part
+// of the prompt that missed the cache, so the prompt size is all three fields
+// summed, and only read tokens count as a hit.
+func TestCacheHitPercent(t *testing.T) {
+	tests := []struct {
+		name     string
+		usage    Usage
+		expected int
+	}{
+		{"fully cached", Usage{InputTokens: 2, CacheReadInputTokens: 115000}, 100},
+		{"half cached", Usage{InputTokens: 500, CacheReadInputTokens: 500}, 50},
+		{"nothing cached", Usage{InputTokens: 1000}, 0},
+		{"cache writes are not hits", Usage{InputTokens: 10, CacheCreationInputTokens: 90}, 0},
+		{"writes and reads split", Usage{CacheCreationInputTokens: 250, CacheReadInputTokens: 750}, 75},
+		{"rounds rather than truncates", Usage{InputTokens: 1, CacheReadInputTokens: 2}, 67},
+		{"no usage reported", Usage{}, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if result := cacheHitPercent(tt.usage); result != tt.expected {
+				t.Errorf("cacheHitPercent(%+v) = %d, want %d", tt.usage, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestColorForPercent(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -240,14 +267,16 @@ func TestService_Run(t *testing.T) {
 	if !strings.Contains(output, "CTX") {
 		t.Errorf("output missing context: %s", output)
 	}
-	if !strings.Contains(output, "I420k") {
-		t.Errorf("output missing input tokens: %s", output)
+	// 420k uncached + 2.3M cache-creation = 2.7M prompt, none of it read from
+	// cache, so the hit rate is 0% even though most of it is cache-bound.
+	if !strings.Contains(output, "Σ2.7M") {
+		t.Errorf("output missing total prompt tokens: %s", output)
 	}
-	if !strings.Contains(output, "O77k") {
+	if !strings.Contains(output, "↓77k") {
 		t.Errorf("output missing output tokens: %s", output)
 	}
-	if !strings.Contains(output, "⚡2.3M") {
-		t.Errorf("output missing cache tokens: %s", output)
+	if !strings.Contains(output, "⚡0%") {
+		t.Errorf("output missing cache hit rate: %s", output)
 	}
 	if !weeklySegment.MatchString(output) {
 		t.Errorf("output missing weekly bar/percentage: %s", output)
@@ -295,6 +324,48 @@ func TestService_Run_WeeklyMirrorsFiveHour(t *testing.T) {
 	}
 	if !strings.Contains(plain, "📅7d ██████░░░░ 62% ↺ 2d4h") {
 		t.Errorf("weekly window should mirror the five-hour window: %s", plain)
+	}
+}
+
+// TestService_Run_TokensLeadWithTotal covers the case that motivated this
+// format: a ~115k prompt served almost entirely from cache used to render as
+// "I2 O277 ⚡115k", where the I2 read like a 2-token context rather than the
+// 2 tokens that missed the cache.
+func TestService_Run_TokensLeadWithTotal(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.ShowGit = false
+	cfg.ShowGitDirty = false
+	cfg.ShowWeekly = false
+
+	input := `{
+		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
+		"workspace": {"project_dir": "/home/user/payments-api"},
+		"context_window": {
+			"used_percentage": 37,
+			"context_window_size": 1000000,
+			"current_usage": {
+				"input_tokens": 2,
+				"output_tokens": 277,
+				"cache_creation_input_tokens": 0,
+				"cache_read_input_tokens": 115000
+			}
+		},
+		"cost": {"total_cost_usd": 1.00},
+		"rate_limits": {"five_hour": {"used_percentage": 12}}
+	}`
+
+	output, err := runWithInput(t, New(cfg), input)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	plain := stripANSI(output)
+
+	if !strings.Contains(plain, "Σ115k ↓277 ⚡100%") {
+		t.Errorf("tokens should lead with the full prompt size: %s", plain)
+	}
+	if strings.Contains(plain, "I2") {
+		t.Errorf("the uncached remainder should no longer be shown as the input: %s", plain)
 	}
 }
 
@@ -423,7 +494,7 @@ func TestService_Run_MinimalConfig(t *testing.T) {
 	output := buf.String()
 
 	// Should not contain tokens, weekly, or cost
-	if strings.Contains(output, "I100k") {
+	if strings.Contains(output, "Σ") {
 		t.Errorf("output should not contain tokens: %s", output)
 	}
 	if strings.Contains(output, "7d") {

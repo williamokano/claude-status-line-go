@@ -24,7 +24,8 @@ weekly_show_at: 60           # Show weekly usage when >= this %
 #   {limit_bar} {limit_pct} {limit_reset}
 #   {weekly_bar} {weekly_pct} {weekly_reset}
 #   {ctx_bar} {ctx_pct}
-#   {tokens_in} {tokens_out} {tokens_cache}
+#   {tokens_total} {tokens_out} {cache_hit_pct}
+#   {tokens_in} {tokens_cache}
 #   {cost}
 #   {reset} {dim} {bold}
 #   {red} {green} {yellow} {blue} {magenta} {cyan} {white}
