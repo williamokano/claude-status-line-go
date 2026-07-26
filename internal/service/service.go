@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
+	"github.com/williamokano/claude-status-line-go/internal/plugin"
 )
 
 var ansiRegexp = regexp.MustCompile(`\033\[[0-9;]*m`)
@@ -28,13 +29,13 @@ type Input struct {
 		CurrentDir string `json:"current_dir"`
 	} `json:"workspace"`
 	ContextWindow struct {
-		UsedPercentage     float64 `json:"used_percentage"`
-		ContextWindowSize  int     `json:"context_window_size"`
-		CurrentUsage       Usage   `json:"current_usage"`
+		UsedPercentage    float64 `json:"used_percentage"`
+		ContextWindowSize int     `json:"context_window_size"`
+		CurrentUsage      Usage   `json:"current_usage"`
 	} `json:"context_window"`
 	Cost struct {
-		TotalCostUSD   float64 `json:"total_cost_usd"`
-		TotalDurationMS int64  `json:"total_duration_ms"`
+		TotalCostUSD    float64 `json:"total_cost_usd"`
+		TotalDurationMS int64   `json:"total_duration_ms"`
 	} `json:"cost"`
 	RateLimits struct {
 		FiveHour RateLimit `json:"five_hour"`
@@ -43,10 +44,10 @@ type Input struct {
 }
 
 type Usage struct {
-	InputTokens                int `json:"input_tokens"`
-	OutputTokens               int `json:"output_tokens"`
-	CacheCreationInputTokens   int `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens       int `json:"cache_read_input_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 }
 
 type RateLimit struct {
@@ -55,16 +56,16 @@ type RateLimit struct {
 }
 
 const (
-	Reset  = "\033[0m"
-	Dim    = "\033[2m"
-	Bold   = "\033[1m"
-	Red    = "\033[31m"
-	Green  = "\033[32m"
-	Yellow = "\033[33m"
-	Blue   = "\033[34m"
+	Reset   = "\033[0m"
+	Dim     = "\033[2m"
+	Bold    = "\033[1m"
+	Red     = "\033[31m"
+	Green   = "\033[32m"
+	Yellow  = "\033[33m"
+	Blue    = "\033[34m"
 	Magenta = "\033[35m"
-	Cyan   = "\033[36m"
-	White  = "\033[37m"
+	Cyan    = "\033[36m"
+	White   = "\033[37m"
 )
 
 type Service struct {
@@ -102,6 +103,16 @@ type view struct {
 	cacheHitPct int
 
 	cost float64
+
+	plugins []pluginView
+}
+
+// pluginView is one plugin resolved for this render: the finished segment plus
+// every field addressable from a format string.
+type pluginView struct {
+	name   string
+	render string
+	fields map[string]string
 }
 
 func New(cfg config.Config) *Service {
@@ -177,7 +188,172 @@ func (s *Service) buildView(input Input) view {
 		cacheHitPct: cacheHitPercent(tokens),
 
 		cost: input.Cost.TotalCostUSD,
+
+		plugins: s.buildPlugins(),
 	}
+}
+
+// buildPlugins resolves every configured plugin. A plugin that errors or has
+// nothing to say is dropped: a broken segment must never cost you the rest of
+// the status line.
+func (s *Service) buildPlugins() []pluginView {
+	var out []pluginView
+
+	for _, spec := range s.cfg.Plugins {
+		data, err := spec.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "claude-status-line-go: plugin %q: %v\n", spec.Name, err)
+			continue
+		}
+		if data.Hide {
+			continue
+		}
+
+		pv := pluginView{name: spec.Name, fields: pluginFields(spec, data, s.cfg.BarSize)}
+		pv.render = s.renderPlugin(spec, data, pv.fields)
+		if stripANSI(pv.render) == "" {
+			continue
+		}
+		out = append(out, pv)
+	}
+
+	return out
+}
+
+// pluginFields flattens a plugin's output into the values a format string can
+// reach. Extras land here too, which is how one plugin exposes several pieces
+// of information: {plugin.<name>.<key>} for anything it chose to report.
+func pluginFields(spec plugin.Spec, data plugin.Output, barSize int) map[string]string {
+	f := map[string]string{
+		"icon":  spec.Icon,
+		"text":  data.Text,
+		"label": data.Label,
+		"color": spec.ColorName(data),
+	}
+
+	if data.Value != nil {
+		f["value"] = trimFloat(*data.Value)
+	}
+	if data.Max != nil {
+		f["max"] = trimFloat(*data.Max)
+	}
+
+	if pct := data.Percent(); pct >= 0 {
+		f["pct"] = strconv.Itoa(pct)
+		f["bar"] = progressBar(pct, barSize)
+	}
+
+	// Extras never overwrite a reserved field, so a plugin emitting "value"
+	// twice can't produce a surprising segment.
+	for k, v := range data.Extra {
+		if _, taken := f[k]; !taken {
+			f[k] = v
+		}
+	}
+
+	return f
+}
+
+// renderPlugin draws the segment. "raw" opts out entirely; otherwise the host
+// owns the appearance so plugin segments match the native ones.
+func (s *Service) renderPlugin(spec plugin.Spec, data plugin.Output, f map[string]string) string {
+	if data.Raw != "" {
+		return data.Raw
+	}
+
+	body := spec.Display
+	if body == "" {
+		body = defaultDisplay(f)
+	}
+	body = expandFields(body, f)
+
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+
+	if c := ansiColor(f["color"]); c != "" {
+		return c + body + Reset
+	}
+	return body
+}
+
+// defaultDisplay is the layout a plugin gets when it doesn't ask for one:
+// icon, bar, then the most specific text the plugin gave us.
+func defaultDisplay(f map[string]string) string {
+	parts := make([]string, 0, 3)
+	if f["icon"] != "" {
+		parts = append(parts, "{icon}")
+	}
+	if f["bar"] != "" {
+		parts = append(parts, "{bar}")
+	}
+
+	switch {
+	case f["text"] != "":
+		parts = append(parts, "{text}")
+	case f["value"] != "" && f["max"] != "":
+		parts = append(parts, "{value}/{max}")
+	case f["value"] != "":
+		parts = append(parts, "{value}")
+	case f["label"] != "":
+		parts = append(parts, "{label}")
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// expandFields substitutes {key} for any field the plugin reported, plus the
+// shared colour tokens. Unknown placeholders are cleared rather than left as
+// literal braces on the status line.
+func expandFields(tpl string, f map[string]string) string {
+	pairs := make([]string, 0, len(f)*2+len(ansiTokens)*2)
+	for k, v := range f {
+		pairs = append(pairs, "{"+k+"}", v)
+	}
+	for k, v := range ansiTokens {
+		pairs = append(pairs, k, v)
+	}
+	out := strings.NewReplacer(pairs...).Replace(tpl)
+	return unresolvedPlaceholder.ReplaceAllString(out, "")
+}
+
+var unresolvedPlaceholder = regexp.MustCompile(`\{[a-zA-Z0-9_.:-]*\}`)
+
+var ansiTokens = map[string]string{
+	"{reset}": Reset, "{dim}": Dim, "{bold}": Bold,
+	"{red}": Red, "{green}": Green, "{yellow}": Yellow,
+	"{blue}": Blue, "{magenta}": Magenta, "{cyan}": Cyan, "{white}": White,
+}
+
+func ansiColor(name string) string {
+	switch name {
+	case "red":
+		return Red
+	case "green":
+		return Green
+	case "yellow":
+		return Yellow
+	case "blue":
+		return Blue
+	case "magenta":
+		return Magenta
+	case "cyan":
+		return Cyan
+	case "white":
+		return White
+	case "dim":
+		return Dim
+	default:
+		return ""
+	}
+}
+
+func trimFloat(f float64) string {
+	if f == math.Trunc(f) {
+		return strconv.FormatInt(int64(f), 10)
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
 func (s *Service) render(v view) string {
@@ -202,6 +378,12 @@ func (s *Service) render(v view) string {
 	if s.cfg.ShowWeekly && v.weeklyPct >= s.cfg.WeeklyShowAt {
 		bottom += fmt.Sprintf(" %s│ ", Dim)
 		bottom += usageSegment("📅7d", v.weeklyColor, v.weeklyBar, v.weeklyPct, v.weeklyReset) + Reset
+	}
+
+	// Plugins land in declaration order, just before cost — cost reads as the
+	// terminator of the line, so appending after it looks like an afterthought.
+	for _, p := range v.plugins {
+		bottom += fmt.Sprintf(" %s│ %s", Dim, p.render)
 	}
 
 	if s.cfg.ShowCost {
@@ -248,7 +430,19 @@ func stripANSI(s string) string {
 }
 
 func (s *Service) renderFormat(v view) string {
-	repl := strings.NewReplacer(
+	// {plugin.<name>} is the finished segment; {plugin.<name>.<field>} reaches
+	// the parts, including whatever extra keys the plugin reported. The
+	// plugin. prefix keeps the namespace clear of the built-ins, so adding a
+	// built-in later can never collide with someone's plugin name.
+	pluginPairs := make([]string, 0, 16)
+	for _, p := range v.plugins {
+		pluginPairs = append(pluginPairs, "{plugin."+p.name+"}", p.render)
+		for k, val := range p.fields {
+			pluginPairs = append(pluginPairs, "{plugin."+p.name+"."+k+"}", val)
+		}
+	}
+
+	repl := strings.NewReplacer(append(pluginPairs,
 		"{model}", v.model,
 		"{model_name}", "",
 		"{ctx_size}", v.ctxSize,
@@ -282,7 +476,7 @@ func (s *Service) renderFormat(v view) string {
 		"{magenta}", Magenta,
 		"{cyan}", Cyan,
 		"{white}", White,
-	)
+	)...)
 	return repl.Replace(s.cfg.Format)
 }
 

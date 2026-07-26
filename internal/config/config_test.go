@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -108,6 +109,10 @@ func TestLoad_WithEnvVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Load reads a config file now, so point it at an empty dir —
+			// otherwise these assertions depend on the machine running them.
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 			// Save and clear ALL relevant env vars
 			oldEnv := make(map[string]string)
 			for _, k := range allEnvVars {
@@ -125,7 +130,7 @@ func TestLoad_WithEnvVars(t *testing.T) {
 				t.Fatalf("Load() error: %v", err)
 			}
 
-			if cfg != tt.expected {
+			if !reflect.DeepEqual(cfg, tt.expected) {
 				t.Errorf("got %+v, want %+v", cfg, tt.expected)
 			}
 
@@ -146,6 +151,7 @@ func TestLoad_WithEnvVars(t *testing.T) {
 // unrelated SHOW_GIT or BAR_SIZE already in the user's environment would
 // silently reshape the status line.
 func TestLoad_IgnoresUnprefixedEnvVars(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("SHOW_COST", "false")
 	t.Setenv("SHOW_WEEKLY", "false")
 	t.Setenv("SHOW_GIT", "false")
@@ -157,7 +163,7 @@ func TestLoad_IgnoresUnprefixedEnvVars(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if cfg != DefaultConfig() {
+	if !reflect.DeepEqual(cfg, DefaultConfig()) {
 		t.Errorf("unprefixed env vars leaked into config: got %+v, want defaults %+v", cfg, DefaultConfig())
 	}
 }

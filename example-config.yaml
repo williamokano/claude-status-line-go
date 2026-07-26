@@ -33,3 +33,29 @@ weekly_show_at: 60           # Show weekly usage when >= this %
 
 # Disable colors (also available via NO_COLOR env var)
 # no_color: false
+
+# Plugins add your own segments. A plugin reports data — a value, an optional
+# max, maybe a label — and this tool draws it, so plugin segments use the same
+# bar glyphs, bar_size and NO_COLOR handling as the built-in ones.
+#
+# Source JSON looks like:  {"value": 12, "max": 33, "label": "aplicar"}
+# Bare text works too, and is taken as {"text": "..."}.
+# Any key the contract doesn't define is reachable as {plugin.<name>.<key>},
+# which is how one plugin reports several things.
+#
+# plugins:
+#   - name: spec
+#     file: .claude/spec-state.json   # read at render time, costs nothing
+#     icon: "🧩"
+#     bar: true
+#     display: "{icon} {label} {bar} {value}/{max}"   # optional; omit for a sensible default
+#     thresholds:                     # `at` is a lower bound in percent
+#       - { at: 0,  color: red }      # list them the other way round for an
+#       - { at: 40, color: yellow }   # inverted ramp — there's no invert flag
+#       - { at: 80, color: green }
+#
+# Placeholders for the `format` field above:
+#   {plugin.spec}          the finished segment
+#   {plugin.spec.value}    {plugin.spec.max}   {plugin.spec.pct}
+#   {plugin.spec.bar}      {plugin.spec.text}  {plugin.spec.label}
+#   {plugin.spec.<key>}    anything extra the plugin reported

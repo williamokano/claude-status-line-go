@@ -1,8 +1,14 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+
+	"go.yaml.in/yaml/v3"
+
+	"github.com/williamokano/claude-status-line-go/internal/plugin"
 )
 
 type Config struct {
@@ -12,18 +18,46 @@ type Config struct {
 	ShowGit      bool
 	ShowGitDirty bool
 
-	BarSize      int
+	BarSize int
 
-	LimitWarn    int
-	LimitCrit    int
+	LimitWarn int
+	LimitCrit int
 
-	CtxWarn      int
-	CtxCrit      int
+	CtxWarn int
+	CtxCrit int
 
 	WeeklyShowAt int
 
-	NoColor      bool
-	Format       string
+	NoColor bool
+	Format  string
+
+	Plugins []plugin.Spec
+}
+
+// file mirrors claude-status-line.yaml. Every scalar is a pointer so an absent
+// key stays absent: without that, `show_cost: false` and "key not present"
+// look identical and a config file could never turn anything off.
+type file struct {
+	ShowCost     *bool `yaml:"show_cost"`
+	ShowWeekly   *bool `yaml:"show_weekly"`
+	ShowTokens   *bool `yaml:"show_tokens"`
+	ShowGit      *bool `yaml:"show_git"`
+	ShowGitDirty *bool `yaml:"show_git_dirty"`
+
+	BarSize *int `yaml:"bar_size"`
+
+	LimitWarn *int `yaml:"limit_warn"`
+	LimitCrit *int `yaml:"limit_crit"`
+
+	CtxWarn *int `yaml:"ctx_warn"`
+	CtxCrit *int `yaml:"ctx_crit"`
+
+	WeeklyShowAt *int `yaml:"weekly_show_at"`
+
+	NoColor *bool   `yaml:"no_color"`
+	Format  *string `yaml:"format"`
+
+	Plugins []plugin.Spec `yaml:"plugins"`
 }
 
 func DefaultConfig() Config {
@@ -34,21 +68,95 @@ func DefaultConfig() Config {
 		ShowGit:      true,
 		ShowGitDirty: true,
 
-		BarSize:      10,
+		BarSize: 10,
 
-		LimitWarn:    60,
-		LimitCrit:    85,
+		LimitWarn: 60,
+		LimitCrit: 85,
 
-		CtxWarn:      60,
-		CtxCrit:      85,
+		CtxWarn: 60,
+		CtxCrit: 85,
 
 		WeeklyShowAt: 60,
 	}
 }
 
+// Load builds the config from defaults, then the config file, then the
+// environment — so a CSL_ variable always wins over the file, and the file
+// always wins over the defaults.
 func Load() (Config, error) {
 	cfg := DefaultConfig()
 
+	if err := applyFile(&cfg, Path()); err != nil {
+		// A broken config file must not take the status line down: report it
+		// and render with what we have.
+		fmt.Fprintf(os.Stderr, "claude-status-line-go: %v\n", err)
+	}
+	applyEnv(&cfg)
+
+	return cfg, nil
+}
+
+// Path is where the config file is read from, honouring XDG_CONFIG_HOME.
+func Path() string {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(dir, "claude-status-line-go", "claude-status-line.yaml")
+}
+
+func applyFile(cfg *Config, path string) error {
+	if path == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // no config file is the normal case
+		}
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	var f file
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	setBool(&cfg.ShowCost, f.ShowCost)
+	setBool(&cfg.ShowWeekly, f.ShowWeekly)
+	setBool(&cfg.ShowTokens, f.ShowTokens)
+	setBool(&cfg.ShowGit, f.ShowGit)
+	setBool(&cfg.ShowGitDirty, f.ShowGitDirty)
+
+	setInt(&cfg.BarSize, f.BarSize)
+	setInt(&cfg.LimitWarn, f.LimitWarn)
+	setInt(&cfg.LimitCrit, f.LimitCrit)
+	setInt(&cfg.CtxWarn, f.CtxWarn)
+	setInt(&cfg.CtxCrit, f.CtxCrit)
+	setInt(&cfg.WeeklyShowAt, f.WeeklyShowAt)
+
+	setBool(&cfg.NoColor, f.NoColor)
+	if f.Format != nil {
+		cfg.Format = *f.Format
+	}
+
+	for _, p := range f.Plugins {
+		if p.Name == "" {
+			fmt.Fprintf(os.Stderr, "claude-status-line-go: skipping a plugin with no name\n")
+			continue
+		}
+		cfg.Plugins = append(cfg.Plugins, p)
+	}
+
+	return nil
+}
+
+func applyEnv(cfg *Config) {
 	// Every setting is namespaced under CSL_, as documented. Reading the bare
 	// names would let an unrelated SHOW_GIT or BAR_SIZE already in the user's
 	// environment silently reshape the status line.
@@ -68,10 +176,22 @@ func Load() (Config, error) {
 
 	cfg.WeeklyShowAt = getEnvInt("CSL_WEEKLY_SHOW_AT", cfg.WeeklyShowAt)
 
-	cfg.NoColor = getEnvBool("NO_COLOR", false)
-	cfg.Format = os.Getenv("CSL_FORMAT")
+	cfg.NoColor = getEnvBool("NO_COLOR", cfg.NoColor)
+	if v := os.Getenv("CSL_FORMAT"); v != "" {
+		cfg.Format = v
+	}
+}
 
-	return cfg, nil
+func setBool(dst *bool, src *bool) {
+	if src != nil {
+		*dst = *src
+	}
+}
+
+func setInt(dst *int, src *int) {
+	if src != nil {
+		*dst = *src
+	}
 }
 
 func getEnvBool(key string, def bool) bool {
