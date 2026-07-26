@@ -200,6 +200,115 @@ ctx_crit: 85
 weekly_show_at: 60
 ```
 
+Precedence is defaults, then this file, then the environment — so a `CSL_*`
+variable always wins over the file.
+
+## Plugins
+
+Plugins add your own segments. A plugin reports **data** — a value, an optional
+maximum, maybe a label — and this tool draws it. That way your segment gets the
+same bar glyphs, the same `bar_size` and the same `NO_COLOR` handling as the
+built-in ones, instead of every plugin reinventing bars and colours slightly
+differently.
+
+```yaml
+plugins:
+  - name: issues
+    command: >-
+      printf '{"value":%s,"max":100}'
+      "$(gh issue list --json number --jq 'length')"
+    interval: 60s
+    icon: "🎯"
+    bar: true
+    thresholds:
+      - { at: 0,  color: green }
+      - { at: 40, color: yellow }
+      - { at: 70, color: red }
+```
+
+```
+… │ Σ115k ↓277 ⚡99% │ 🎯 ███░░░░░░░ 31/100 │ $7.92
+```
+
+### Sources
+
+| Key | Description |
+|-----|-------------|
+| `file` | A path read at render time. Costs nothing — ideal when something already writes the data, such as a Claude Code hook |
+| `command` | A shell command. **Never runs on the render path** — see below |
+
+A command's result is cached and refreshed out of band. A render reads the cache
+and, if it's older than `interval`, hands the work to a detached process and
+draws the stale value immediately. A 350 ms `gh` call therefore costs the status
+line nothing; it only means the number can be up to `interval` old.
+
+The command gets the Claude Code JSON on stdin, runs in the project directory,
+and has `CSL_PROJECT_DIR` and `CSL_PLUGIN_NAME` set. Its cache is keyed per
+project, so task counts and PR state don't leak between repos. If it fails, the
+last good value stays on screen and the error goes to stderr.
+
+### Output contract
+
+Emit a JSON object on stdout:
+
+```json
+{"value": 12, "max": 33, "label": "aplicar"}
+```
+
+| Field | Description |
+|-------|-------------|
+| `value` | The number. With `max`, drives the percentage, bar and thresholds |
+| `max` | Optional. Without it the segment is just text — no bar, no colour |
+| `text` | Overrides the auto-formatted `value/max` |
+| `label` | A short name, available to `display` |
+| `state` | `ok`, `warn` or `crit` — skips threshold resolution |
+| `hide` | `true` to drop the segment this render |
+| `raw` | Pre-rendered output, ANSI and all. Opts out of everything above |
+
+Bare text works too and is taken as `text`, so `echo "12 left"` is a valid
+plugin. **Any key not listed above** is reachable as `{plugin.<name>.<key>}` —
+that's how one plugin reports several pieces of information.
+
+### Options
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `name` | — | Required. Names the placeholders |
+| `icon` | — | Prefix glyph |
+| `bar` | `false` | Draw a progress bar, using the global `bar_size` |
+| `display` | — | Layout template, e.g. `"{icon} {label} {bar} {value}/{max}"` |
+| `thresholds` | — | Colour stops, see below |
+| `interval` | `60s` | How long a `command` result stays fresh |
+| `timeout` | `5s` | Caps one run of a `command` |
+
+`thresholds` is a list, where `at` is a lower bound in percent and each colour
+applies upward. There's no "invert" flag — for a ramp where more is better, list
+the colours the other way round:
+
+```yaml
+thresholds:
+  - { at: 0,  color: red }
+  - { at: 31, color: yellow }
+  - { at: 61, color: green }
+```
+
+### Placeholders
+
+Plugin segments append to the default layout in declaration order, just before
+cost. To place them yourself, use `format`:
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{plugin.<name>}` | The finished segment |
+| `{plugin.<name>.value}` | Reported value |
+| `{plugin.<name>.max}` | Reported maximum |
+| `{plugin.<name>.pct}` | Percentage |
+| `{plugin.<name>.bar}` | Progress bar |
+| `{plugin.<name>.text}` | Text |
+| `{plugin.<name>.label}` | Label |
+| `{plugin.<name>.color}` | Resolved colour name |
+| `{plugin.<name>.<key>}` | Any extra key the plugin reported |
+
 ## Custom Output Format
 
 Use the `CSL_FORMAT` env var or `format` config field to customize the output.
