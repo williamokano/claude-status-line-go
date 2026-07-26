@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-status-line-go — a status line for Claude Code</title>
+<meta name="description" content="A Go CLI that prints your Claude Code rate-limit windows, context usage, tokens, cache hit rate and session cost as two lines under your prompt.">
+<meta property="og:title" content="claude-status-line-go">
+<meta property="og:description" content="Two lines under your prompt: rate-limit windows, context, tokens, cache hit rate, cost.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://williamokano.github.io/claude-status-line-go/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230F1319'/%3E%3Crect x='5' y='13' width='7' height='6' fill='%234FD6C8'/%3E%3Crect x='13.5' y='13' width='7' height='6' fill='%237FD88F'/%3E%3Crect x='22' y='13' width='5' height='6' fill='%23263039'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ── tokens ───────────────────────────────────────────────────────── */
+:root{
+  --ground:#0F1319;
+  --ground-2:#121820;
+  --surface:#18202A;
+  --line:#26313D;
+  --line-soft:#1D2630;
+  --ink:#DCE3EB;
+  --ink-2:#93A1AF;
+  --ink-3:#737F8D;   /* 4.57:1 on --ground — the floor for the small mono labels */
+  --cyan:#4FD6C8;
+  --green:#7FD88F;
+  --yellow:#E8C468;
+  --red:#EC8468;
+
+  --font-display:'Archivo','Helvetica Neue',Arial,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+
+  --gutter:clamp(1.25rem,4vw,2.5rem);
+  --maxw:1120px;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--font-display);
+  font-weight:400;
+  font-size:clamp(1rem,0.96rem + 0.2vw,1.0625rem);
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:2px}
+
+/* ── layout primitives ────────────────────────────────────────────── */
+.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:var(--gutter)}
+.section{padding-block:clamp(4.5rem,10vw,8rem)}
+.section.section--first{padding-block:clamp(2.5rem,6vw,4rem) clamp(4.5rem,10vw,7rem)}
+
+/* the product's own material, used as the page's divider */
+.rule{
+  font-family:var(--font-mono);
+  font-size:.75rem;
+  line-height:1;
+  color:var(--line);
+  overflow:hidden;
+  white-space:nowrap;
+  user-select:none;
+  height:.75rem;
+}
+
+.eyebrow{
+  font-family:var(--font-mono);
+  font-size:.7rem;
+  font-weight:500;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  margin:0 0 1.25rem;
+  display:flex;
+  align-items:center;
+  gap:.6rem;
+}
+.eyebrow::before{content:'▚';color:var(--cyan);font-size:.85rem}
+
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
+h1{
+  font-size:clamp(2.5rem,1.2rem + 6vw,5.25rem);
+  font-weight:700;
+  font-stretch:118%;
+  line-height:.94;
+  letter-spacing:-.025em;
+}
+h2{
+  font-size:clamp(1.75rem,1.1rem + 2.6vw,2.85rem);
+  font-weight:600;
+  font-stretch:114%;
+  line-height:1.04;
+  letter-spacing:-.02em;
+}
+h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
+.lede{
+  color:var(--ink-2);
+  max-width:56ch;
+  margin:1.5rem 0 0;
+  font-size:clamp(1.0625rem,1rem + 0.3vw,1.1875rem);
+}
+.note{color:var(--ink-2);max-width:62ch;margin:1.25rem 0 0}
+
+/* ── nav ──────────────────────────────────────────────────────────── */
+.nav{
+  position:sticky;top:0;z-index:20;
+  background:color-mix(in srgb,var(--ground) 86%,transparent);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line-soft);
+}
+.nav__in{
+  max-width:var(--maxw);margin-inline:auto;padding:.85rem clamp(1rem,4vw,2.5rem);
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+}
+.nav__mark{
+  font-family:var(--font-mono);font-size:clamp(.6875rem,2.6vw,.8125rem);font-weight:500;
+  color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:.5rem;
+  white-space:nowrap;
+}
+.nav__mark span{color:var(--cyan)}
+.nav__links{display:flex;align-items:center;gap:clamp(.7rem,2.4vw,1.75rem)}
+.nav__links a{
+  font-family:var(--font-mono);font-size:clamp(.6875rem,2.4vw,.75rem);letter-spacing:.06em;
+  color:var(--ink-2);text-decoration:none;transition:color .15s;white-space:nowrap;
+}
+.nav__links a:hover{color:var(--cyan)}
+.nav__links a.is-hidden-sm,
+.nav__links a.is-hidden-xs{display:none}
+@media(min-width:430px){.nav__links a.is-hidden-xs{display:inline}}
+@media(min-width:620px){.nav__links a.is-hidden-sm{display:inline}}
+
+/* ── hero ─────────────────────────────────────────────────────────── */
+/* grid and flex children default to min-width:auto, so the pre-formatted
+   terminal content below would otherwise push the page wider than the phone */
+.hero__grid{display:grid;gap:clamp(2.5rem,5vw,3.5rem)}
+.hero__grid > *{min-width:0}
+
+/* ── status line block ────────────────────────────────────────────── */
+.sl{
+  border:1px solid var(--line);
+  background:linear-gradient(180deg,var(--surface),var(--ground-2));
+  border-radius:10px;
+  overflow:hidden;
+  box-shadow:0 24px 60px -30px rgba(0,0,0,.9);
+}
+.sl__bar{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.6rem .9rem;
+  border-bottom:1px solid var(--line-soft);
+  font-family:var(--font-mono);font-size:.6875rem;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+}
+.sl__scrub{color:var(--line);letter-spacing:0;text-transform:none;font-size:.75rem;flex:none;display:none}
+@media(min-width:560px){.sl__scrub{display:block}}
+.sl__body{position:relative}
+.sl__scroll{overflow-x:auto;padding:1.1rem .9rem 1.2rem;scrollbar-width:thin}
+.sl__fade{
+  position:absolute;inset-block:0;right:0;width:2.5rem;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#151C25);
+  transition:opacity .2s;
+}
+.sl__line{
+  font-family:var(--font-mono);
+  font-size:clamp(.5rem,1.55vw,1rem);
+  line-height:1.85;
+  white-space:pre;
+  margin:0;
+}
+.sl__line + .sl__line{margin-top:.1rem}
+.dim{color:var(--ink-3)}
+.cy{color:var(--cyan)}
+.ok{color:var(--green)}
+.warn{color:var(--yellow)}
+.crit{color:var(--red)}
+.money{color:var(--yellow)}
+.tok{color:var(--ink)}
+#weekly{display:none}
+#weekly.is-on{display:inline;animation:segIn .45s ease both}
+@keyframes segIn{from{opacity:0}to{opacity:1}}
+
+/* ── commands ─────────────────────────────────────────────────────── */
+.cmds{display:grid;gap:.625rem;margin-top:2rem;min-width:0}
+.cmd{
+  display:flex;align-items:center;gap:.75rem;min-width:0;
+  border:1px solid var(--line);border-radius:8px;
+  background:var(--ground-2);
+  padding:.7rem .75rem .7rem 1rem;
+}
+.cmd__prompt{color:var(--cyan);font-family:var(--font-mono);font-size:.875rem;flex:none}
+.cmd__text{
+  font-family:var(--font-mono);font-size:clamp(.7rem,1.9vw,.875rem);
+  color:var(--ink);overflow-x:auto;white-space:pre;flex:1;min-width:0;scrollbar-width:none;
+}
+.cmd__text::-webkit-scrollbar{display:none}
+.cmd__copy{
+  flex:none;font-family:var(--font-mono);font-size:.6875rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+  background:transparent;border:1px solid var(--line);border-radius:5px;
+  padding:.35rem .6rem;cursor:pointer;transition:color .15s,border-color .15s;
+}
+.cmd__copy:hover{color:var(--cyan);border-color:var(--cyan)}
+.cmd__copy[data-done="1"]{color:var(--green);border-color:var(--green)}
+
+/* ── anatomy ──────────────────────────────────────────────────────── */
+.seg{
+  display:grid;grid-template-columns:minmax(0,1fr);gap:.5rem 2rem;
+  padding:1.4rem 0;
+  border-top:1px solid var(--line-soft);
+}
+.seg:last-child{border-bottom:1px solid var(--line-soft)}
+@media(min-width:860px){
+  .seg{grid-template-columns:minmax(0,25rem) minmax(0,1fr);align-items:baseline}
+}
+.seg__code{
+  font-family:var(--font-mono);font-size:clamp(.75rem,1.8vw,.9375rem);
+  white-space:pre;overflow-x:auto;scrollbar-width:none;
+}
+.seg__code::-webkit-scrollbar{display:none}
+.seg__name{
+  font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);margin:0 0 .3rem;
+}
+.seg__text{margin:0;color:var(--ink-2);font-size:.9375rem}
+.seg__text code{
+  font-family:var(--font-mono);font-size:.85em;color:var(--ink);
+  background:var(--ground-2);border:1px solid var(--line-soft);
+  border-radius:4px;padding:.05em .35em;
+}
+
+/* ── thresholds ───────────────────────────────────────────────────── */
+.ramp{display:grid;gap:1rem;margin-top:2.5rem}
+@media(min-width:760px){.ramp{grid-template-columns:repeat(3,1fr);gap:1.25rem}}
+.step{
+  border:1px solid var(--line);border-radius:9px;
+  background:var(--ground-2);padding:1.25rem 1.25rem 1.4rem;
+}
+.step__bar{font-family:var(--font-mono);font-size:1.125rem;line-height:1.4;white-space:pre}
+.step__label{
+  font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);margin:.85rem 0 .45rem;
+}
+.step__label code{text-transform:none;font-family:var(--font-mono);letter-spacing:.04em}
+.step__text{margin:0;font-size:.9375rem;color:var(--ink-2)}
+
+/* ── tabs ─────────────────────────────────────────────────────────── */
+.tabs{margin-top:2.5rem;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--ground-2)}
+.tabs__list{display:flex;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:none}
+.tabs__list::-webkit-scrollbar{display:none}
+.tab{
+  flex:none;font-family:var(--font-mono);font-size:.75rem;letter-spacing:.08em;
+  color:var(--ink-3);background:transparent;border:0;
+  border-bottom:2px solid transparent;
+  padding:.85rem 1.15rem;cursor:pointer;white-space:nowrap;transition:color .15s;
+}
+.tab:hover{color:var(--ink-2)}
+.tab[aria-selected="true"]{color:var(--cyan);border-bottom-color:var(--cyan)}
+.panel{padding:1.4rem clamp(1rem,3vw,1.6rem) 1.6rem}
+.panel[hidden]{display:none}
+.panel pre{
+  margin:0;overflow-x:auto;
+  font-family:var(--font-mono);font-size:clamp(.75rem,1.8vw,.8125rem);
+  line-height:1.75;color:var(--ink-2);
+}
+.panel pre .k{color:var(--cyan)}
+.panel pre .v{color:var(--green)}
+.panel pre .c{color:var(--ink-3)}
+.panel pre .s{color:var(--yellow)}
+.panel__note{margin:1.2rem 0 0;font-size:.875rem;color:var(--ink-3);max-width:60ch}
+
+.vars{display:grid;gap:0;margin:0}
+@media(min-width:700px){.vars{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:2.5rem}}
+.var{display:flex;justify-content:space-between;gap:1rem;padding:.55rem 0;border-bottom:1px solid var(--line-soft)}
+.var dt{font-family:var(--font-mono);font-size:.8125rem;color:var(--ink)}
+.var dd{margin:0;font-family:var(--font-mono);font-size:.8125rem;color:var(--ink-3);text-align:right;flex:none}
+
+.ph{display:flex;flex-wrap:wrap;gap:.4rem;margin:0}
+.ph span{
+  font-family:var(--font-mono);font-size:.75rem;color:var(--ink-2);
+  border:1px solid var(--line);border-radius:5px;padding:.25rem .5rem;
+  background:var(--ground);
+}
+
+/* ── footer ───────────────────────────────────────────────────────── */
+.foot{border-top:1px solid var(--line-soft);padding-block:2.5rem 3.5rem}
+.foot__in{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:center;justify-content:space-between}
+.foot p{margin:0;font-family:var(--font-mono);font-size:.75rem;color:var(--ink-3)}
+.foot a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line)}
+.foot a:hover{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+/* ── motion ───────────────────────────────────────────────────────── */
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s ease}
+.reveal.is-in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__in">
+    <a class="nav__mark" href="#top"><span>▚</span>claude-status-line-go</a>
+    <div class="nav__links">
+      <a href="#anatomy" class="is-hidden-xs">Anatomy</a>
+      <a href="#thresholds" class="is-hidden-sm">Thresholds</a>
+      <a href="#configure" class="is-hidden-sm">Configure</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/williamokano/claude-status-line-go">GitHub&nbsp;↗</a>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+
+  <!-- ── hero ─────────────────────────────────────────────────────── -->
+  <section class="section section--first">
+    <div class="wrap hero__grid">
+      <div>
+        <p class="eyebrow">Status line · Claude Code</p>
+        <h1>How much Claude&nbsp;Code have you got left?</h1>
+        <p class="lede">
+          Two lines under your prompt: both rate-limit windows, context used, prompt size,
+          cache hit rate and session cost. Written in Go — it reads Claude Code's JSON on
+          stdin, prints, and exits.
+        </p>
+      </div>
+
+      <div>
+        <div class="sl">
+          <div class="sl__bar">
+            <span>Simulated session</span>
+            <span class="sl__scrub" id="scrub" aria-hidden="true">░░░░░░░░░░░░░░░░░░░░░░░░</span>
+          </div>
+          <div class="sl__body">
+            <div class="sl__scroll">
+              <p class="sl__line"><span class="cy">🧠 Opus 5·1M</span><span class="dim"> │ 📁 payments-api │ 🌿 feature/calendar ●3</span></p>
+              <p class="sl__line"><span id="five" class="ok">🟡5h ░░░░░░░░░░ 0% ↺ 5h0m</span><span class="dim"> │ </span><span id="ctx" class="ok">CTX ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="tok" id="tokens">Σ0 ↓0 ⚡0%</span><span class="dim"><span id="weekly"> │ <span id="weeklyInner" class="ok">📅7d ░░░░░░░░░░ 0% ↺ 2d4h</span></span> │ </span><span class="money" id="cost">$0.00</span></p>
+            </div>
+            <div class="sl__fade" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <div class="cmds">
+          <div class="cmd">
+            <span class="cmd__prompt" aria-hidden="true">$</span>
+            <code class="cmd__text">go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest</code>
+            <button class="cmd__copy" type="button" data-copy="go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest">Copy</button>
+          </div>
+          <div class="cmd">
+            <span class="cmd__prompt" aria-hidden="true">$</span>
+            <code class="cmd__text">claude-status-line-go install</code>
+            <button class="cmd__copy" type="button" data-copy="claude-status-line-go install">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
+
+  <!-- ── anatomy ──────────────────────────────────────────────────── -->
+  <section class="section" id="anatomy">
+    <div class="wrap">
+      <p class="eyebrow">Anatomy</p>
+      <h2 class="reveal">Every glyph is doing a&nbsp;job.</h2>
+      <p class="note reveal">
+        Eight segments, left to right. Turn any of them off — the ones you keep close up
+        the gaps.
+      </p>
+
+      <div class="reveal">
+        <div class="seg">
+          <div class="seg__code"><span class="cy">🧠 Opus 5·1M</span></div>
+          <div>
+            <p class="seg__name">Model</p>
+            <p class="seg__text">The model Claude Code reports, then its context window — <code>200k</code> or <code>1M</code>. It survives a mid-turn model switch instead of going blank.</p>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg__code"><span class="dim">📁 payments-api</span></div>
+          <div>
+            <p class="seg__name">Project</p>
+            <p class="seg__text">The working directory's folder name, so a second window is never a guess.</p>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg__code"><span class="dim">🌿 feature/calendar ●3</span></div>
+          <div>
+            <p class="seg__name">Branch</p>
+            <p class="seg__text">Current branch, and <code>●3</code> for three files with uncommitted changes. Hide the dot count on its own with <code>show_git_dirty</code>.</p>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg__code"><span class="warn">🟡5h ████████░░ 83% ↺ 22m</span></div>
+          <div>
+            <p class="seg__name">5-hour window</p>
+            <p class="seg__text">How much of the rolling five-hour limit you've spent, and how long until it resets.</p>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg__code"><span class="warn">CTX ██████░░░░ 68%</span></div>
+          <div>
+            <p class="seg__name">Context</p>
+            <p class="seg__text">Share of the context window in use. Its own thresholds, separate from the rate limits — <code>ctx_warn</code> and <code>ctx_crit</code>.</p>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg__code"><span class="tok">Σ115k ↓277 ⚡99%</span></div>
+          <div>
+            <p class="seg__name">Tokens</p>
+            <p class="seg__text">
+              <code>Σ</code> the whole prompt, <code>↓</code> tokens generated, <code>⚡</code> the share of the prompt served from cache.
+              Σ sums all three input fields — Claude Code's <code>input_tokens</code> counts only what <em>missed</em> the cache,
+              so on a warm conversation it reads as a couple of tokens while the real prompt is 100k+.
+            </p>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg__code"><span class="warn">📅7d ███████░░░ 74% ↺ 2d4h</span></div>
+          <div>
+            <p class="seg__name">Weekly window</p>
+            <p class="seg__text">Same shape as the five-hour window, same colors. It stays out of the way until it hits <code>weekly_show_at</code> — 60% by default — and its countdown switches to <code>2d4h</code> form once the reset is more than a day out.</p>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg__code"><span class="money">$7.92</span></div>
+          <div>
+            <p class="seg__name">Cost</p>
+            <p class="seg__text">What this session has cost so far.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
+
+  <!-- ── thresholds ───────────────────────────────────────────────── -->
+  <section class="section" id="thresholds">
+    <div class="wrap">
+      <p class="eyebrow">Thresholds</p>
+      <h2 class="reveal">Green until it&nbsp;isn't.</h2>
+      <p class="note reveal">
+        Every bar crosses the same two lines. Both rate-limit windows share
+        <code style="font-family:var(--font-mono);font-size:.85em">limit_warn</code> and
+        <code style="font-family:var(--font-mono);font-size:.85em">limit_crit</code>;
+        context has its own pair. Move them wherever your nerve sits.
+      </p>
+
+      <div class="ramp reveal">
+        <div class="step">
+          <div class="step__bar ok">███░░░░░░░ 31%</div>
+          <p class="step__label">Under 60%</p>
+          <p class="step__text">Plenty of room. Nothing to do.</p>
+        </div>
+        <div class="step">
+          <div class="step__bar warn">███████░░░ 74%</div>
+          <p class="step__label">60% — <code style="font-family:var(--font-mono)">limit_warn</code></p>
+          <p class="step__text">Past the warning line. Worth knowing before you start something large.</p>
+        </div>
+        <div class="step">
+          <div class="step__bar crit">█████████░ 91%</div>
+          <p class="step__label">85% — <code style="font-family:var(--font-mono)">limit_crit</code></p>
+          <p class="step__text">Close to the ceiling. Check the reset countdown next to the bar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
+
+  <!-- ── configure ────────────────────────────────────────────────── -->
+  <section class="section" id="configure">
+    <div class="wrap">
+      <p class="eyebrow">Configure</p>
+      <h2 class="reveal">Change what it&nbsp;shows.</h2>
+      <p class="note reveal">
+        A config file, an environment variable, or a format string — whichever fits how you
+        already manage your shell. Environment variables win over the file.
+      </p>
+
+      <div class="tabs reveal">
+        <div class="tabs__list" role="tablist" aria-label="Configuration methods">
+          <button class="tab" role="tab" id="tab-file" aria-controls="panel-file" aria-selected="true">Config file</button>
+          <button class="tab" role="tab" id="tab-env" aria-controls="panel-env" aria-selected="false" tabindex="-1">Environment</button>
+          <button class="tab" role="tab" id="tab-fmt" aria-controls="panel-fmt" aria-selected="false" tabindex="-1">Custom format</button>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-file" aria-labelledby="tab-file" tabindex="0">
+<pre><span class="c"># ~/.config/claude-status-line-go/claude-status-line.yaml</span>
+
+<span class="k">show_cost</span>:      <span class="v">true</span>
+<span class="k">show_weekly</span>:    <span class="v">true</span>
+<span class="k">show_tokens</span>:    <span class="v">true</span>
+<span class="k">show_git</span>:       <span class="v">true</span>
+<span class="k">show_git_dirty</span>: <span class="v">true</span>
+
+<span class="k">bar_size</span>:       <span class="v">10</span>   <span class="c"># characters per progress bar</span>
+<span class="k">limit_warn</span>:     <span class="v">60</span>   <span class="c"># 5-hour and weekly</span>
+<span class="k">limit_crit</span>:     <span class="v">85</span>
+<span class="k">ctx_warn</span>:       <span class="v">60</span>
+<span class="k">ctx_crit</span>:       <span class="v">85</span>
+<span class="k">weekly_show_at</span>: <span class="v">60</span>   <span class="c"># reveal the weekly bar at this %</span></pre>
+          <p class="panel__note">Colors also switch off with <code style="font-family:var(--font-mono)">no_color</code>, the <code style="font-family:var(--font-mono)">--no-color</code> flag, or a <code style="font-family:var(--font-mono)">NO_COLOR</code> environment variable.</p>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-env" aria-labelledby="tab-env" tabindex="0" hidden>
+          <dl class="vars">
+            <div class="var"><dt>CSL_SHOW_COST</dt><dd>true</dd></div>
+            <div class="var"><dt>CSL_SHOW_WEEKLY</dt><dd>true</dd></div>
+            <div class="var"><dt>CSL_SHOW_TOKENS</dt><dd>true</dd></div>
+            <div class="var"><dt>CSL_SHOW_GIT</dt><dd>true</dd></div>
+            <div class="var"><dt>CSL_SHOW_GIT_DIRTY</dt><dd>true</dd></div>
+            <div class="var"><dt>CSL_BAR_SIZE</dt><dd>10</dd></div>
+            <div class="var"><dt>CSL_LIMIT_WARN</dt><dd>60</dd></div>
+            <div class="var"><dt>CSL_LIMIT_CRIT</dt><dd>85</dd></div>
+            <div class="var"><dt>CSL_CTX_WARN</dt><dd>60</dd></div>
+            <div class="var"><dt>CSL_CTX_CRIT</dt><dd>85</dd></div>
+            <div class="var"><dt>CSL_WEEKLY_SHOW_AT</dt><dd>60</dd></div>
+            <div class="var"><dt>CSL_FORMAT</dt><dd>—</dd></div>
+            <div class="var"><dt>NO_COLOR</dt><dd>—</dd></div>
+          </dl>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-fmt" aria-labelledby="tab-fmt" tabindex="0" hidden>
+<pre><span class="c"># CSL_FORMAT, or the `format` field in the config file</span>
+
+<span class="s">"{cyan}🧠 {model}·{ctx_size}{reset} {dim}│ 📁 {project}{reset} {dim}│ 🌿 {branch}{reset}{dirty}"</span></pre>
+          <p class="panel__label" style="font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:1.6rem 0 .75rem">Placeholders</p>
+          <p class="ph">
+            <span>{model}</span><span>{ctx_size}</span><span>{project}</span><span>{branch}</span><span>{dirty}</span>
+            <span>{limit_bar}</span><span>{limit_pct}</span><span>{limit_color}</span><span>{limit_reset}</span>
+            <span>{ctx_bar}</span><span>{ctx_pct}</span><span>{ctx_color}</span>
+            <span>{tokens_total}</span><span>{tokens_out}</span><span>{cache_hit_pct}</span><span>{tokens_in}</span><span>{tokens_cache}</span>
+            <span>{weekly_bar}</span><span>{weekly_pct}</span><span>{weekly_color}</span><span>{weekly_reset}</span>
+            <span>{cost}</span>
+            <span>{reset}</span><span>{dim}</span><span>{bold}</span>
+            <span>{red}</span><span>{green}</span><span>{yellow}</span><span>{blue}</span><span>{magenta}</span><span>{cyan}</span><span>{white}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
+
+  <!-- ── install ──────────────────────────────────────────────────── -->
+  <section class="section" id="install">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h2 class="reveal">Two&nbsp;commands.</h2>
+      <p class="note reveal">
+        The second one writes the <code style="font-family:var(--font-mono)">statusLine</code> entry into
+        <code style="font-family:var(--font-mono)">~/.claude/settings.json</code> and leaves everything else in
+        that file alone. Add <code style="font-family:var(--font-mono)">--project</code> to register it in the current
+        repo's <code style="font-family:var(--font-mono)">.claude/settings.json</code> instead.
+      </p>
+
+      <div class="cmds reveal" style="max-width:52rem">
+        <div class="cmd">
+          <span class="cmd__prompt" aria-hidden="true">$</span>
+          <code class="cmd__text">go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest</code>
+          <button class="cmd__copy" type="button" data-copy="go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest">Copy</button>
+        </div>
+        <div class="cmd">
+          <span class="cmd__prompt" aria-hidden="true">$</span>
+          <code class="cmd__text">claude-status-line-go install</code>
+          <button class="cmd__copy" type="button" data-copy="claude-status-line-go install">Copy</button>
+        </div>
+      </div>
+
+      <p class="note reveal" style="margin-top:2.25rem">
+        Shell completions print to stdout for bash, zsh and fish:
+        <code style="font-family:var(--font-mono);font-size:.85em">eval "$(claude-status-line-go --completion zsh)"</code>
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <p>MIT · <a href="https://github.com/williamokano/claude-status-line-go">github.com/williamokano/claude-status-line-go</a></p>
+    <p>Built in Go</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── divider rows, sized to the element ──────────────────────── */
+  function fillRules(){
+    document.querySelectorAll('.rule').forEach(function(el){
+      var n = Math.ceil(el.clientWidth / 8) + 4;
+      el.textContent = '░'.repeat(n);
+    });
+  }
+  fillRules();
+  window.addEventListener('resize', fillRules);
+
+  /* ── the right-edge fade only earns its place when there's more to see ── */
+  var scroller = document.querySelector('.sl__scroll'),
+      fade = document.querySelector('.sl__fade');
+  function syncFade(){
+    fade.style.opacity = scroller.scrollWidth > scroller.clientWidth + 2 ? '1' : '0';
+  }
+  syncFade();
+  window.addEventListener('resize', syncFade);
+  scroller.addEventListener('scroll', syncFade);
+
+  /* ── copy buttons ────────────────────────────────────────────── */
+  document.querySelectorAll('.cmd__copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      navigator.clipboard.writeText(btn.dataset.copy).then(function(){
+        btn.textContent = 'Copied';
+        btn.dataset.done = '1';
+        setTimeout(function(){ btn.textContent = 'Copy'; delete btn.dataset.done; }, 1600);
+      });
+    });
+  });
+
+  /* ── tabs ────────────────────────────────────────────────────── */
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+  function select(i){
+    tabs.forEach(function(t, j){
+      var on = i === j;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach(function(t, i){
+    t.addEventListener('click', function(){ select(i); });
+    t.addEventListener('keydown', function(e){
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      var n = (i + d + tabs.length) % tabs.length;
+      select(n);
+      tabs[n].focus();
+    });
+  });
+
+  /* ── scroll reveal ───────────────────────────────────────────── */
+  var reveals = document.querySelectorAll('.reveal');
+  if (reduce || !('IntersectionObserver' in window)) {
+    reveals.forEach(function(el){ el.classList.add('is-in'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); }
+      });
+    }, { rootMargin: '0px 0px -12% 0px' });
+    reveals.forEach(function(el){ io.observe(el); });
+  }
+
+  /* ── the status line itself ──────────────────────────────────── */
+  var BAR = 10, LOOP = 26000;
+  var five = document.getElementById('five'),
+      ctx = document.getElementById('ctx'),
+      tokens = document.getElementById('tokens'),
+      weekly = document.getElementById('weekly'),
+      weeklyInner = document.getElementById('weeklyInner'),
+      cost = document.getElementById('cost'),
+      scrub = document.getElementById('scrub');
+
+  function bar(pct){
+    var f = Math.round(pct / 100 * BAR);
+    return '█'.repeat(f) + '░'.repeat(BAR - f);
+  }
+  function level(pct, warn, crit){
+    return pct >= crit ? 'crit' : pct >= warn ? 'warn' : 'ok';
+  }
+  function k(n){
+    return n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n));
+  }
+  function hm(mins){
+    var t = Math.round(mins), h = Math.floor(t / 60), m = t % 60;
+    return h > 0 ? h + 'h' + m + 'm' : m + 'm';
+  }
+
+  function frame(p){
+    var e = p * p * (3 - 2 * p);              // smoothstep
+
+    var f = 92 * e;
+    five.className = level(f, 60, 85);
+    five.textContent = '🟡5h ' + bar(f) + ' ' + Math.round(f) + '% ↺ ' + hm(300 - 278 * e);
+
+    var c = 71 * e;
+    ctx.className = level(c, 60, 85);
+    ctx.textContent = 'CTX ' + bar(c) + ' ' + Math.round(c) + '%';
+
+    var hit = p < 0.12 ? 0 : Math.min(99, (p - 0.12) / 0.3 * 99);
+    tokens.textContent = 'Σ' + k(115000 * e) + ' ↓' + k(277 * e) + ' ⚡' + Math.round(hit) + '%';
+
+    var w = 74 * e;
+    weeklyInner.className = level(w, 60, 85);
+    weeklyInner.textContent = '📅7d ' + bar(w) + ' ' + Math.round(w) + '% ↺ 2d4h';
+    weekly.classList.toggle('is-on', w >= 60);   // weekly_show_at
+
+    cost.textContent = '$' + (7.92 * e).toFixed(2);
+    scrub.textContent = '█'.repeat(Math.round(p * 24)) + '░'.repeat(24 - Math.round(p * 24));
+  }
+
+  if (reduce) {
+    frame(1);
+  } else {
+    var t0 = null;
+    requestAnimationFrame(function step(ts){
+      if (t0 === null) t0 = ts;
+      var p = ((ts - t0) % LOOP) / LOOP;
+      frame(p < 0.88 ? p / 0.88 : 1);          // fill, then hold before looping
+      requestAnimationFrame(step);
+    });
+  }
+})();
+</script>
+</body>
+</html>
