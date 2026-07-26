@@ -215,6 +215,29 @@
         already manage your shell. Environment variables win over the file.
       </p>
 
+      <div class="way reveal" style="margin-top:2.5rem">
+        <p class="way__label">Don't go hunting for the path</p>
+        <div class="cmds" style="margin-top:0;max-width:38rem">
+          <div class="cmd">
+            <span class="cmd__prompt" aria-hidden="true">$</span>
+            <code class="cmd__text">claude-status-line-go config init</code>
+            <button class="cmd__copy" type="button" data-copy="claude-status-line-go config init">Copy</button>
+          </div>
+          <div class="cmd">
+            <span class="cmd__prompt" aria-hidden="true">$</span>
+            <code class="cmd__text">nvim $(claude-status-line-go config path)</code>
+            <button class="cmd__copy" type="button" data-copy="nvim $(claude-status-line-go config path)">Copy</button>
+          </div>
+        </div>
+        <p class="way__note">
+          <code>config init</code> writes a fully commented file — every option, plus two
+          ready-to-uncomment plugin examples. It's all already the default, so an untouched
+          file changes nothing, and it won't overwrite an existing config without
+          <code>--force</code>. <code>config path</code> prints the location on its own,
+          which is why the second line works.
+        </p>
+      </div>
+
       <div class="tabs reveal">
         <div class="tabs__list" role="tablist" aria-label="Configuration methods">
           <button class="tab" role="tab" id="tab-file" aria-controls="panel-file" aria-selected="true">Config file</button>

@@ -155,6 +155,11 @@ echo '{"model":...}' | claude-status-line-go
 | Command | Description |
 |---------|-------------|
 | `install` | Register this binary as the Claude Code status line |
+| `config init` | Write the commented default config, ready to edit |
+| `config path` | Print the config file path |
+| `plugins` | Show each plugin's state and what it renders |
+| `plugins refresh [name]` | Run command plugins now, in the foreground |
+| `plugins clean` | Drop cache entries that can't be useful any more |
 
 | Flag | Description |
 |------|-------------|
@@ -184,7 +189,27 @@ echo '{"model":...}' | claude-status-line-go
 
 ## Configuration File
 
-Create `~/.config/claude-status-line-go/claude-status-line.yaml`:
+You don't need one — every default is sensible and the tool works with no
+config at all. When you do want to change something, don't go hunting for the
+path:
+
+```bash
+claude-status-line-go config init
+```
+
+That writes a fully commented file with every option and two ready-to-uncomment
+plugin examples. Everything in it is already the default, so an untouched file
+changes nothing. It won't overwrite an existing config unless you pass
+`--force`.
+
+`config path` prints the location on its own, so it composes:
+
+```bash
+nvim $(claude-status-line-go config path)
+```
+
+The file lives at `~/.config/claude-status-line-go/claude-status-line.yaml`,
+or under `$XDG_CONFIG_HOME` if you've set one:
 
 ```yaml
 show_cost: true

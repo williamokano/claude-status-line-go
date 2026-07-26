@@ -1,6 +1,8 @@
 package config
 
 import (
+	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +12,44 @@ import (
 
 	"github.com/williamokano/claude-status-line-go/internal/plugin"
 )
+
+// defaultYAML is the file `config init` writes. Embedding it means the file you
+// get is the file in the repository — it can't drift from what the docs show.
+//
+//go:embed default.yaml
+var defaultYAML string
+
+// ErrExists reports that a config file is already there, so init won't
+// overwrite hand-written settings by accident.
+var ErrExists = errors.New("config file already exists")
+
+// Init writes the commented default config and returns where it put it.
+// Passing force replaces an existing file.
+func Init(force bool) (string, error) {
+	path := Path()
+	if path == "" {
+		return "", errors.New("could not work out a config directory; set XDG_CONFIG_HOME")
+	}
+
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return path, ErrExists
+		} else if !os.IsNotExist(err) {
+			return path, err
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return path, fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(defaultYAML), 0o644); err != nil {
+		return path, fmt.Errorf("writing %s: %w", path, err)
+	}
+	return path, nil
+}
+
+// Default is the config file contents Init writes, exposed for tests.
+func Default() string { return defaultYAML }
 
 type Config struct {
 	ShowCost     bool
