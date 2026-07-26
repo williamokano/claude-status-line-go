@@ -46,8 +46,8 @@ func TestDefaultConfig(t *testing.T) {
 func TestLoad_WithEnvVars(t *testing.T) {
 	// All env vars we test
 	allEnvVars := []string{
-		"SHOW_COST", "SHOW_WEEKLY", "SHOW_TOKENS", "SHOW_GIT", "SHOW_GIT_DIRTY",
-		"BAR_SIZE", "LIMIT_WARN", "LIMIT_CRIT", "CTX_WARN", "CTX_CRIT", "WEEKLY_SHOW_AT",
+		"CSL_SHOW_COST", "CSL_SHOW_WEEKLY", "CSL_SHOW_TOKENS", "CSL_SHOW_GIT", "CSL_SHOW_GIT_DIRTY",
+		"CSL_BAR_SIZE", "CSL_LIMIT_WARN", "CSL_LIMIT_CRIT", "CSL_CTX_WARN", "CSL_CTX_CRIT", "CSL_WEEKLY_SHOW_AT",
 	}
 
 	tests := []struct {
@@ -58,17 +58,17 @@ func TestLoad_WithEnvVars(t *testing.T) {
 		{
 			name: "all env vars set",
 			envVars: map[string]string{
-				"SHOW_COST":        "false",
-				"SHOW_WEEKLY":      "false",
-				"SHOW_TOKENS":      "false",
-				"SHOW_GIT":         "false",
-				"SHOW_GIT_DIRTY":   "false",
-				"BAR_SIZE":         "15",
-				"LIMIT_WARN":       "50",
-				"LIMIT_CRIT":       "90",
-				"CTX_WARN":         "50",
-				"CTX_CRIT":         "90",
-				"WEEKLY_SHOW_AT":   "70",
+				"CSL_SHOW_COST":      "false",
+				"CSL_SHOW_WEEKLY":    "false",
+				"CSL_SHOW_TOKENS":    "false",
+				"CSL_SHOW_GIT":       "false",
+				"CSL_SHOW_GIT_DIRTY": "false",
+				"CSL_BAR_SIZE":       "15",
+				"CSL_LIMIT_WARN":     "50",
+				"CSL_LIMIT_CRIT":     "90",
+				"CSL_CTX_WARN":       "50",
+				"CSL_CTX_CRIT":       "90",
+				"CSL_WEEKLY_SHOW_AT": "70",
 			},
 			expected: Config{
 				ShowCost:     false,
@@ -86,7 +86,7 @@ func TestLoad_WithEnvVars(t *testing.T) {
 		},
 		{
 			name:     "partial env vars",
-			envVars:  map[string]string{"BAR_SIZE": "20", "SHOW_COST": "false"},
+			envVars:  map[string]string{"CSL_BAR_SIZE": "20", "CSL_SHOW_COST": "false"},
 			expected: Config{ShowCost: false, BarSize: 20, ShowWeekly: true, ShowTokens: true, ShowGit: true, ShowGitDirty: true, LimitWarn: 60, LimitCrit: 85, CtxWarn: 60, CtxCrit: 85, WeeklyShowAt: 60},
 		},
 		{
@@ -96,12 +96,12 @@ func TestLoad_WithEnvVars(t *testing.T) {
 		},
 		{
 			name:     "invalid bool uses default",
-			envVars:  map[string]string{"SHOW_COST": "invalid"},
+			envVars:  map[string]string{"CSL_SHOW_COST": "invalid"},
 			expected: Config{ShowCost: true, ShowWeekly: true, ShowTokens: true, ShowGit: true, ShowGitDirty: true, BarSize: 10, LimitWarn: 60, LimitCrit: 85, CtxWarn: 60, CtxCrit: 85, WeeklyShowAt: 60},
 		},
 		{
 			name:     "invalid int defaults to zero then default",
-			envVars:  map[string]string{"BAR_SIZE": "invalid"},
+			envVars:  map[string]string{"CSL_BAR_SIZE": "invalid"},
 			expected: DefaultConfig(),
 		},
 	}
@@ -138,6 +138,46 @@ func TestLoad_WithEnvVars(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestLoad_IgnoresUnprefixedEnvVars guards the CSL_ namespace. Load used to
+// read the bare names, so every documented CSL_* variable was a no-op and an
+// unrelated SHOW_GIT or BAR_SIZE already in the user's environment would
+// silently reshape the status line.
+func TestLoad_IgnoresUnprefixedEnvVars(t *testing.T) {
+	t.Setenv("SHOW_COST", "false")
+	t.Setenv("SHOW_WEEKLY", "false")
+	t.Setenv("SHOW_GIT", "false")
+	t.Setenv("BAR_SIZE", "99")
+	t.Setenv("WEEKLY_SHOW_AT", "1")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg != DefaultConfig() {
+		t.Errorf("unprefixed env vars leaked into config: got %+v, want defaults %+v", cfg, DefaultConfig())
+	}
+}
+
+// TestLoad_ReadsPrefixedEnvVars is the other half of the contract: the
+// documented CSL_* names must actually take effect.
+func TestLoad_ReadsPrefixedEnvVars(t *testing.T) {
+	t.Setenv("CSL_SHOW_WEEKLY", "false")
+	t.Setenv("CSL_WEEKLY_SHOW_AT", "80")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.ShowWeekly {
+		t.Error("CSL_SHOW_WEEKLY=false should disable the weekly window")
+	}
+	if cfg.WeeklyShowAt != 80 {
+		t.Errorf("CSL_WEEKLY_SHOW_AT = %d, want 80", cfg.WeeklyShowAt)
 	}
 }
 
