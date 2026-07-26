@@ -66,6 +66,8 @@ weekly_show_at: 60           # Show weekly usage when >= this %
 #     icon: "🧩"
 #     bar: true
 #     display: "{icon} {label} {bar} {value}/{max}"   # optional; omit for a sensible default
+#     hide_when: zero                 # drop the segment when the value is 0
+#                                     # ("full" drops it when value reaches max)
 #     thresholds:                     # `at` is a lower bound in percent
 #       - { at: 0,  color: red }      # list them the other way round for an
 #       - { at: 40, color: yellow }   # inverted ramp — there's no invert flag

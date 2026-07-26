@@ -700,12 +700,18 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
     <span class="k">file</span>: <span class="v">.claude/spec-state.json</span>
     <span class="k">icon</span>: <span class="s">"🧩"</span>
     <span class="k">bar</span>: <span class="v">true</span>
-    <span class="k">display</span>: <span class="s">"{icon} {label} {bar} {value}/{max}"</span></pre>
+    <span class="k">display</span>: <span class="s">"{icon} {label} {bar} {value}/{max}"</span>
+    <span class="k">hide_when</span>: <span class="v">zero</span>   <span class="c"># nothing left to do, so say nothing</span></pre>
           </div>
           <p class="way__note">
             Read straight off disk, so it costs nothing at all. This is the one to
             reach for when something already writes the data — a Claude Code hook
             firing on the event that changes it beats polling for it.
+          </p>
+          <p class="way__note">
+            <code>hide_when</code> keeps counters out of the way when they've
+            nothing to say: <code>zero</code> when the value is 0,
+            <code>full</code> when it reaches its maximum.
           </p>
         </div>
       </div>
@@ -725,6 +731,12 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
           source, cache age and the segment it renders.
           <code>plugins refresh</code> runs the commands in the foreground and
           shows you the error.
+        </p>
+        <p class="way__note">
+          Cached values are per plugin and per project, so they build up as you
+          move between repos. Every background refresh prunes the ones that can't
+          matter any more — plugins you've removed, anything untouched for a
+          fortnight — and <code>plugins clean</code> does it on demand.
         </p>
       </div>
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
 	"github.com/williamokano/claude-status-line-go/internal/installer"
+	"github.com/williamokano/claude-status-line-go/internal/plugin"
 	"github.com/williamokano/claude-status-line-go/internal/service"
 )
 
@@ -133,8 +134,11 @@ func runPlugins(args []string) int {
 	if len(args) > 0 && args[0] == "refresh" {
 		return refreshPlugins(cfg, dir, args[1:])
 	}
+	if len(args) > 0 && args[0] == "clean" {
+		return cleanPlugins(cfg)
+	}
 	if len(args) > 0 {
-		fmt.Fprintf(os.Stderr, "Unknown: plugins %s (try: plugins, plugins refresh [name])\n", args[0])
+		fmt.Fprintf(os.Stderr, "Unknown: plugins %s (try: plugins, plugins refresh [name], plugins clean)\n", args[0])
 		return 1
 	}
 
@@ -205,6 +209,44 @@ func refreshPlugins(cfg config.Config, dir string, names []string) int {
 	return 0
 }
 
+// cleanPlugins drops cache entries that can't be useful: plugins no longer in
+// the config, and entries nothing has touched in a fortnight. Cached values are
+// per project, so they accumulate as you move between repos.
+func cleanPlugins(cfg config.Config) int {
+	names := make([]string, 0, len(cfg.Plugins))
+	for _, p := range cfg.Plugins {
+		names = append(names, p.Name)
+	}
+
+	pruned, err := plugin.Prune(names, plugin.MaxCacheAge)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not clean %s: %v\n", plugin.CacheDir(), err)
+		return 1
+	}
+
+	if pruned.Total() == 0 {
+		fmt.Printf("Nothing to clean in %s\n", plugin.CacheDir())
+		return 0
+	}
+	if len(pruned.Orphaned) > 0 {
+		fmt.Printf("Removed %d entr%s for plugins no longer configured: %s\n",
+			len(pruned.Orphaned), plural(len(pruned.Orphaned)), strings.Join(pruned.Orphaned, ", "))
+	}
+	if len(pruned.Expired) > 0 {
+		fmt.Printf("Removed %d entr%s untouched for over %d days: %s\n",
+			len(pruned.Expired), plural(len(pruned.Expired)),
+			int(plugin.MaxCacheAge.Hours()/24), strings.Join(pruned.Expired, ", "))
+	}
+	return 0
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
+}
+
 // runRefresh is the detached half of a command plugin: run it, cache the
 // result, exit. Nobody is waiting on this, so failures go to stderr and the
 // exit code exists only for anyone debugging by hand.
@@ -226,7 +268,20 @@ func runRefresh(name string) int {
 		if spec.Name != name {
 			continue
 		}
-		if err := spec.Refresh(dir, input); err != nil {
+		err := spec.Refresh(dir, input)
+
+		// This process is detached and nothing is waiting on it, so it's the
+		// right place to tidy up — pruning here keeps it off the render path
+		// and means nobody has to remember to run `plugins clean`.
+		names := make([]string, 0, len(cfg.Plugins))
+		for _, p := range cfg.Plugins {
+			names = append(names, p.Name)
+		}
+		if _, pruneErr := plugin.Prune(names, plugin.MaxCacheAge); pruneErr != nil {
+			fmt.Fprintf(os.Stderr, "claude-status-line-go: pruning cache: %v\n", pruneErr)
+		}
+
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "claude-status-line-go: %v\n", err)
 			return 1
 		}
@@ -272,6 +327,8 @@ Commands:
   plugins refresh [name]
                        run command plugins now, in the foreground, and
                        report any errors
+  plugins clean        drop cached values for plugins that are no longer
+                       configured, and any untouched for over two weeks
 
 Options:
   -h, --help              print this help
