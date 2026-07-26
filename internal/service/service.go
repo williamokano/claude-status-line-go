@@ -98,6 +98,8 @@ type view struct {
 	tokensIn    string
 	tokensOut   string
 	tokensCache string
+	tokensTotal string
+	cacheHitPct int
 
 	cost float64
 }
@@ -145,6 +147,7 @@ func (s *Service) buildView(input Input) view {
 	branch, dirty := s.getGitInfo()
 
 	tokens := input.ContextWindow.CurrentUsage
+	cached := tokens.CacheCreationInputTokens + tokens.CacheReadInputTokens
 
 	return view{
 		model:   shortModel(input.Model.DisplayName),
@@ -169,7 +172,9 @@ func (s *Service) buildView(input Input) view {
 
 		tokensIn:    humanTokens(tokens.InputTokens),
 		tokensOut:   humanTokens(tokens.OutputTokens),
-		tokensCache: humanTokens(tokens.CacheCreationInputTokens + tokens.CacheReadInputTokens),
+		tokensCache: humanTokens(cached),
+		tokensTotal: humanTokens(tokens.InputTokens + cached),
+		cacheHitPct: cacheHitPercent(tokens),
 
 		cost: input.Cost.TotalCostUSD,
 	}
@@ -191,7 +196,7 @@ func (s *Service) render(v view) string {
 	bottom += fmt.Sprintf("%s %s│ %sCTX %s %d%%%s", Reset, Dim, v.ctxColor, v.ctxBar, v.ctxPct, Reset)
 
 	if s.cfg.ShowTokens {
-		bottom += fmt.Sprintf(" %s│ I%s O%s ⚡%s", Dim, v.tokensIn, v.tokensOut, v.tokensCache)
+		bottom += fmt.Sprintf(" %s│ Σ%s ↓%s ⚡%d%%", Dim, v.tokensTotal, v.tokensOut, v.cacheHitPct)
 	}
 
 	if s.cfg.ShowWeekly && v.weeklyPct >= s.cfg.WeeklyShowAt {
@@ -260,6 +265,8 @@ func (s *Service) renderFormat(v view) string {
 		"{tokens_in}", v.tokensIn,
 		"{tokens_out}", v.tokensOut,
 		"{tokens_cache}", v.tokensCache,
+		"{tokens_total}", v.tokensTotal,
+		"{cache_hit_pct}", strconv.Itoa(v.cacheHitPct),
 		"{cost}", fmt.Sprintf("%.2f", v.cost),
 		"{weekly_pct}", strconv.Itoa(v.weeklyPct),
 		"{weekly_bar}", v.weeklyBar,
@@ -295,6 +302,20 @@ func contextSize(size int) string {
 	default:
 		return strconv.Itoa(size)
 	}
+}
+
+// cacheHitPercent reports what share of the prompt was served from the cache.
+//
+// The three input fields partition the prompt: input_tokens is only the part
+// that missed the cache entirely, so the prompt size is all three summed. Just
+// the read tokens count as a hit — creation tokens were written on this call
+// and billed at a premium, so folding them in would report a hit for a miss.
+func cacheHitPercent(u Usage) int {
+	total := u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+	if total == 0 {
+		return 0
+	}
+	return int(math.Round(float64(u.CacheReadInputTokens) / float64(total) * 100))
 }
 
 func humanTokens(n int) string {
