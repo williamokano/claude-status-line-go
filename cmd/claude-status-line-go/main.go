@@ -150,6 +150,7 @@ Environment variables:
   CSL_BAR_SIZE             progress bar width (default: 10)
   CSL_LIMIT_WARN           rate limit warning threshold %% (default: 60)
   CSL_LIMIT_CRIT           rate limit critical threshold %% (default: 85)
+                           both apply to the 5-hour and weekly windows
   CSL_CTX_WARN             context warning threshold %% (default: 60)
   CSL_CTX_CRIT             context critical threshold %% (default: 85)
   CSL_WEEKLY_SHOW_AT       show weekly when >= this %% (default: 60)

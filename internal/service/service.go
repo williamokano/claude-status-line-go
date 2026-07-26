@@ -71,6 +71,37 @@ type Service struct {
 	cfg config.Config
 }
 
+// view holds every value the renderers need, already formatted and colored.
+// It is computed once per run so the default renderer and the custom-format
+// renderer can never drift apart on how a value is presented.
+type view struct {
+	model   string
+	ctxSize string
+	project string
+	branch  string
+	dirty   string
+
+	ctxPct   int
+	ctxBar   string
+	ctxColor string
+
+	limit5Pct   int
+	limit5Bar   string
+	limit5Color string
+	limit5Reset string
+
+	weeklyPct   int
+	weeklyBar   string
+	weeklyColor string
+	weeklyReset string
+
+	tokensIn    string
+	tokensOut   string
+	tokensCache string
+
+	cost float64
+}
+
 func New(cfg config.Config) *Service {
 	return &Service{cfg: cfg}
 }
@@ -95,80 +126,95 @@ func (s *Service) Run() error {
 		}
 	}
 
-	ctxPercent := int(math.Round(input.ContextWindow.UsedPercentage))
-	ctxSize := input.ContextWindow.ContextWindowSize
-	tokensIn := input.ContextWindow.CurrentUsage.InputTokens
-	tokensOut := input.ContextWindow.CurrentUsage.OutputTokens
-	tokensCache := input.ContextWindow.CurrentUsage.CacheCreationInputTokens + input.ContextWindow.CurrentUsage.CacheReadInputTokens
-	cost := input.Cost.TotalCostUSD
-	limit5 := int(math.Round(input.RateLimits.FiveHour.UsedPercentage))
-	limit5Reset := input.RateLimits.FiveHour.ResetsAt
-	weekly := int(math.Round(input.RateLimits.Weekly.UsedPercentage))
+	v := s.buildView(input)
 
-	modelStr := shortModel(input.Model.DisplayName)
-	sizeStr := contextSize(ctxSize)
-
-	ctxColor := colorForPercent(ctxPercent, s.cfg.CtxWarn, s.cfg.CtxCrit)
-	limitColor := colorForPercent(limit5, s.cfg.LimitWarn, s.cfg.LimitCrit)
-
-	ctxBar := progressBar(ctxPercent, s.cfg.BarSize)
-	limitBar := progressBar(limit5, s.cfg.BarSize)
-
-	projectName := filepath.Base(input.Workspace.ProjectDir)
-
-	if s.cfg.Format != "" {
-		out := s.renderFormat(modelStr, sizeStr, ctxPercent, limit5, ctxBar, limitBar,
-			ctxColor, limitColor, cost, projectName, tokensIn, tokensOut, tokensCache, weekly, limit5Reset)
-		if s.cfg.NoColor {
-			out = stripANSI(out)
-		}
-		fmt.Println(out)
-		return nil
-	}
-
-	top := fmt.Sprintf("%s🧠 %s·%s%s", Cyan, modelStr, sizeStr, Reset)
-	top += fmt.Sprintf(" %s│ 📁 %s%s", Dim, projectName, Reset)
-
-	branch, dirty := s.getGitInfo()
-	if branch != "" {
-		top += fmt.Sprintf(" %s│ 🌿 %s%s%s", Dim, branch, dirty, Reset)
-	}
-
-	bottom := ""
-	bottom += fmt.Sprintf("%s🟡5h %s %d%%", limitColor, limitBar, limit5)
-
-	resetIn := timeUntil(limit5Reset)
-	if resetIn != "" {
-		bottom += fmt.Sprintf(" ↺ %s", resetIn)
-	}
-
-	bottom += fmt.Sprintf("%s %s│ %sCTX %s %d%%%s", Reset, Dim, ctxColor, ctxBar, ctxPercent, Reset)
-
-	if s.cfg.ShowTokens {
-		bottom += fmt.Sprintf(" %s│ I%s O%s ⚡%s",
-			Dim,
-			humanTokens(tokensIn),
-			humanTokens(tokensOut),
-			humanTokens(tokensCache),
-		)
-	}
-
-	if s.cfg.ShowWeekly && weekly >= s.cfg.WeeklyShowAt {
-		bottom += fmt.Sprintf(" %s│ %s7d %d%%%s", Dim, Dim, weekly, Reset)
-	}
-
-	if s.cfg.ShowCost {
-		bottom += fmt.Sprintf(" %s│ %s$%.2f%s", Dim, Yellow, cost, Reset)
-		}
-
-	out := top + "\n" + bottom
-
+	out := s.render(v)
 	if s.cfg.NoColor {
 		out = stripANSI(out)
 	}
 
 	fmt.Println(out)
 	return nil
+}
+
+func (s *Service) buildView(input Input) view {
+	ctxPct := int(math.Round(input.ContextWindow.UsedPercentage))
+	limit5Pct := int(math.Round(input.RateLimits.FiveHour.UsedPercentage))
+	weeklyPct := int(math.Round(input.RateLimits.Weekly.UsedPercentage))
+
+	branch, dirty := s.getGitInfo()
+
+	tokens := input.ContextWindow.CurrentUsage
+
+	return view{
+		model:   shortModel(input.Model.DisplayName),
+		ctxSize: contextSize(input.ContextWindow.ContextWindowSize),
+		project: filepath.Base(input.Workspace.ProjectDir),
+		branch:  branch,
+		dirty:   dirty,
+
+		ctxPct:   ctxPct,
+		ctxBar:   progressBar(ctxPct, s.cfg.BarSize),
+		ctxColor: colorForPercent(ctxPct, s.cfg.CtxWarn, s.cfg.CtxCrit),
+
+		limit5Pct:   limit5Pct,
+		limit5Bar:   progressBar(limit5Pct, s.cfg.BarSize),
+		limit5Color: colorForPercent(limit5Pct, s.cfg.LimitWarn, s.cfg.LimitCrit),
+		limit5Reset: timeUntil(input.RateLimits.FiveHour.ResetsAt),
+
+		weeklyPct:   weeklyPct,
+		weeklyBar:   progressBar(weeklyPct, s.cfg.BarSize),
+		weeklyColor: colorForPercent(weeklyPct, s.cfg.LimitWarn, s.cfg.LimitCrit),
+		weeklyReset: timeUntil(input.RateLimits.Weekly.ResetsAt),
+
+		tokensIn:    humanTokens(tokens.InputTokens),
+		tokensOut:   humanTokens(tokens.OutputTokens),
+		tokensCache: humanTokens(tokens.CacheCreationInputTokens + tokens.CacheReadInputTokens),
+
+		cost: input.Cost.TotalCostUSD,
+	}
+}
+
+func (s *Service) render(v view) string {
+	if s.cfg.Format != "" {
+		return s.renderFormat(v)
+	}
+
+	top := fmt.Sprintf("%s🧠 %s·%s%s", Cyan, v.model, v.ctxSize, Reset)
+	top += fmt.Sprintf(" %s│ 📁 %s%s", Dim, v.project, Reset)
+
+	if v.branch != "" {
+		top += fmt.Sprintf(" %s│ 🌿 %s%s%s", Dim, v.branch, v.dirty, Reset)
+	}
+
+	bottom := usageSegment("🟡5h", v.limit5Color, v.limit5Bar, v.limit5Pct, v.limit5Reset)
+	bottom += fmt.Sprintf("%s %s│ %sCTX %s %d%%%s", Reset, Dim, v.ctxColor, v.ctxBar, v.ctxPct, Reset)
+
+	if s.cfg.ShowTokens {
+		bottom += fmt.Sprintf(" %s│ I%s O%s ⚡%s", Dim, v.tokensIn, v.tokensOut, v.tokensCache)
+	}
+
+	if s.cfg.ShowWeekly && v.weeklyPct >= s.cfg.WeeklyShowAt {
+		bottom += fmt.Sprintf(" %s│ ", Dim)
+		bottom += usageSegment("📅7d", v.weeklyColor, v.weeklyBar, v.weeklyPct, v.weeklyReset) + Reset
+	}
+
+	if s.cfg.ShowCost {
+		bottom += fmt.Sprintf(" %s│ %s$%.2f%s", Dim, Yellow, v.cost, Reset)
+	}
+
+	return top + "\n" + bottom
+}
+
+// usageSegment renders one rate-limit window — "<label> <bar> <pct>% ↺ <reset>" —
+// so the 5-hour and 7-day windows always look alike. The reset countdown is
+// dropped when Claude Code doesn't report a reset time for that window.
+func usageSegment(label, color, bar string, pct int, resetIn string) string {
+	seg := fmt.Sprintf("%s%s %s %d%%", color, label, bar, pct)
+	if resetIn != "" {
+		seg += fmt.Sprintf(" ↺ %s", resetIn)
+	}
+	return seg
 }
 
 // failedInputPrefix names the debug dumps written when stdin fails to parse:
@@ -196,32 +242,29 @@ func stripANSI(s string) string {
 	return ansiRegexp.ReplaceAllString(s, "")
 }
 
-func (s *Service) renderFormat(modelStr, sizeStr string, ctxPercent, limit5 int,
-	ctxBar, limitBar, ctxColor, limitColor string, cost float64, projectName string,
-	tokensIn, tokensOut, tokensCache, weekly int, limit5Reset int64) string {
-
-	branch, dirty := s.getGitInfo()
-	resetIn := timeUntil(limit5Reset)
-
+func (s *Service) renderFormat(v view) string {
 	repl := strings.NewReplacer(
-		"{model}", modelStr,
+		"{model}", v.model,
 		"{model_name}", "",
-		"{ctx_size}", sizeStr,
-		"{project}", projectName,
-		"{branch}", branch,
-		"{dirty}", dirty,
-		"{limit_bar}", limitBar,
-		"{limit_pct}", strconv.Itoa(limit5),
-		"{limit_color}", limitColor,
-		"{limit_reset}", resetIn,
-		"{ctx_bar}", ctxBar,
-		"{ctx_pct}", strconv.Itoa(ctxPercent),
-		"{ctx_color}", ctxColor,
-		"{tokens_in}", humanTokens(tokensIn),
-		"{tokens_out}", humanTokens(tokensOut),
-		"{tokens_cache}", humanTokens(tokensCache),
-		"{cost}", fmt.Sprintf("%.2f", cost),
-		"{weekly_pct}", strconv.Itoa(weekly),
+		"{ctx_size}", v.ctxSize,
+		"{project}", v.project,
+		"{branch}", v.branch,
+		"{dirty}", v.dirty,
+		"{limit_bar}", v.limit5Bar,
+		"{limit_pct}", strconv.Itoa(v.limit5Pct),
+		"{limit_color}", v.limit5Color,
+		"{limit_reset}", v.limit5Reset,
+		"{ctx_bar}", v.ctxBar,
+		"{ctx_pct}", strconv.Itoa(v.ctxPct),
+		"{ctx_color}", v.ctxColor,
+		"{tokens_in}", v.tokensIn,
+		"{tokens_out}", v.tokensOut,
+		"{tokens_cache}", v.tokensCache,
+		"{cost}", fmt.Sprintf("%.2f", v.cost),
+		"{weekly_pct}", strconv.Itoa(v.weeklyPct),
+		"{weekly_bar}", v.weeklyBar,
+		"{weekly_color}", v.weeklyColor,
+		"{weekly_reset}", v.weeklyReset,
 		"{reset}", Reset,
 		"{dim}", Dim,
 		"{bold}", Bold,
@@ -291,6 +334,10 @@ func timeUntil(unixSeconds int64) string {
 	}
 	hours := int(diff.Hours())
 	minutes := int(diff.Minutes()) % 60
+	// The weekly window resets days out, where "163h20m" is unreadable noise.
+	if hours >= 24 {
+		return fmt.Sprintf("%dd%dh", hours/24, hours%24)
+	}
 	if hours > 0 {
 		return fmt.Sprintf("%dh%02dm", hours, minutes)
 	}
