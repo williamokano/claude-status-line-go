@@ -21,355 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-/* ── tokens ───────────────────────────────────────────────────────── */
-:root{
-  --ground:#0F1319;
-  --ground-2:#121820;
-  --surface:#18202A;
-  --line:#26313D;
-  --line-soft:#1D2630;
-  --ink:#DCE3EB;
-  --ink-2:#93A1AF;
-  --ink-3:#737F8D;   /* 4.57:1 on --ground — the floor for the small mono labels */
-  --cyan:#4FD6C8;
-  --green:#7FD88F;
-  --yellow:#E8C468;
-  --red:#EC8468;
-
-  --font-display:'Archivo','Helvetica Neue',Arial,sans-serif;
-  --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
-
-  --gutter:clamp(1.25rem,4vw,2.5rem);
-  --maxw:1120px;
-
-  /* Two prose sizes, and only two. Body is for the paragraph that introduces a
-     section; small is for every explanatory note inside one. Anything else and
-     paragraphs doing the same job end up at different sizes. */
-  --text-sm:.9375rem;
-}
-
-*,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{
-  margin:0;
-  background:var(--ground);
-  color:var(--ink);
-  font-family:var(--font-display);
-  font-weight:400;
-  font-size:clamp(1rem,0.96rem + 0.2vw,1.0625rem);
-  line-height:1.65;
-  -webkit-font-smoothing:antialiased;
-}
-img{max-width:100%}
-a{color:inherit}
-:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:2px}
-
-/* ── layout primitives ────────────────────────────────────────────── */
-.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:var(--gutter)}
-.section{padding-block:clamp(4.5rem,10vw,8rem)}
-.section.section--first{padding-block:clamp(2.5rem,6vw,4rem) clamp(4.5rem,10vw,7rem)}
-
-/* the product's own material, used as the page's divider */
-.rule{
-  font-family:var(--font-mono);
-  font-size:.75rem;
-  line-height:1;
-  color:var(--line);
-  overflow:hidden;
-  white-space:nowrap;
-  user-select:none;
-  height:.75rem;
-}
-
-.eyebrow{
-  font-family:var(--font-mono);
-  font-size:.7rem;
-  font-weight:500;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--ink-3);
-  margin:0 0 1.25rem;
-  display:flex;
-  align-items:center;
-  gap:.6rem;
-}
-.eyebrow::before{content:'▚';color:var(--cyan);font-size:.85rem}
-
-h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
-h1{
-  font-size:clamp(2.5rem,1.2rem + 6vw,5.25rem);
-  font-weight:700;
-  font-stretch:118%;
-  line-height:.94;
-  letter-spacing:-.025em;
-}
-h2{
-  font-size:clamp(1.75rem,1.1rem + 2.6vw,2.85rem);
-  font-weight:600;
-  font-stretch:114%;
-  line-height:1.04;
-  letter-spacing:-.02em;
-}
-h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
-.lede{
-  color:var(--ink-2);
-  max-width:56ch;
-  margin:1.5rem 0 0;
-  font-size:clamp(1.0625rem,1rem + 0.3vw,1.1875rem);
-}
-/* .note introduces a section, directly under its h2. A trailing note that sits
-   alongside block-level prose takes .note--sm so it matches its neighbours. */
-.note{color:var(--ink-2);max-width:62ch;margin:1.25rem 0 0}
-.note.note--sm{font-size:var(--text-sm)}
-.note a{color:var(--cyan);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--cyan) 35%,transparent)}
-.note a:hover{border-bottom-color:var(--cyan)}
-
-/* ── nav ──────────────────────────────────────────────────────────── */
-.nav{
-  position:sticky;top:0;z-index:20;
-  background:color-mix(in srgb,var(--ground) 86%,transparent);
-  backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line-soft);
-}
-.nav__in{
-  max-width:var(--maxw);margin-inline:auto;padding:.85rem clamp(1rem,4vw,2.5rem);
-  display:flex;align-items:center;justify-content:space-between;gap:1rem;
-}
-.nav__mark{
-  font-family:var(--font-mono);font-size:clamp(.6875rem,2.6vw,.8125rem);font-weight:500;
-  color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:.5rem;
-  white-space:nowrap;
-}
-.nav__mark span{color:var(--cyan)}
-.nav__links{display:flex;align-items:center;gap:clamp(.7rem,2.4vw,1.75rem)}
-.nav__links a{
-  font-family:var(--font-mono);font-size:clamp(.6875rem,2.4vw,.75rem);letter-spacing:.06em;
-  color:var(--ink-2);text-decoration:none;transition:color .15s;white-space:nowrap;
-}
-.nav__links a:hover{color:var(--cyan)}
-.nav__links a.is-hidden-sm,
-.nav__links a.is-hidden-xs{display:none}
-@media(min-width:430px){.nav__links a.is-hidden-xs{display:inline}}
-@media(min-width:760px){.nav__links a.is-hidden-sm{display:inline}}
-
-/* ── hero ─────────────────────────────────────────────────────────── */
-/* grid and flex children default to min-width:auto, so the pre-formatted
-   terminal content below would otherwise push the page wider than the phone */
-.hero__grid{display:grid;gap:clamp(2.5rem,5vw,3.5rem)}
-.hero__grid > *{min-width:0}
-
-/* ── status line block ────────────────────────────────────────────── */
-.sl{
-  border:1px solid var(--line);
-  background:linear-gradient(180deg,var(--surface),var(--ground-2));
-  border-radius:10px;
-  overflow:hidden;
-  box-shadow:0 24px 60px -30px rgba(0,0,0,.9);
-}
-.sl__bar{
-  display:flex;align-items:center;justify-content:space-between;gap:1rem;
-  padding:.6rem .9rem;
-  border-bottom:1px solid var(--line-soft);
-  font-family:var(--font-mono);font-size:.6875rem;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
-}
-.sl__scrub{color:var(--line);letter-spacing:0;text-transform:none;font-size:.75rem;flex:none;display:none}
-@media(min-width:560px){.sl__scrub{display:block}}
-.sl__body{position:relative}
-.sl__scroll{overflow-x:auto;padding:1.1rem .9rem 1.2rem;scrollbar-width:thin}
-.sl__fade{
-  position:absolute;inset-block:0;right:0;width:2.5rem;pointer-events:none;
-  background:linear-gradient(90deg,transparent,#151C25);
-  transition:opacity .2s;
-}
-.sl__line{
-  font-family:var(--font-mono);
-  font-size:clamp(.5rem,1.55vw,1rem);
-  line-height:1.85;
-  white-space:pre;
-  margin:0;
-}
-.sl__line + .sl__line{margin-top:.1rem}
-.dim{color:var(--ink-3)}
-.cy{color:var(--cyan)}
-.ok{color:var(--green)}
-.warn{color:var(--yellow)}
-.crit{color:var(--red)}
-.money{color:var(--yellow)}
-.tok{color:var(--ink)}
-#weekly{display:none}
-#weekly.is-on{display:inline;animation:segIn .45s ease both}
-@keyframes segIn{from{opacity:0}to{opacity:1}}
-
-/* ── commands ─────────────────────────────────────────────────────── */
-.cmds{display:grid;gap:.625rem;margin-top:2rem;min-width:0}
-.cmd{
-  display:flex;align-items:center;gap:.75rem;min-width:0;
-  border:1px solid var(--line);border-radius:8px;
-  background:var(--ground-2);
-  padding:.7rem .75rem .7rem 1rem;
-}
-.cmd__prompt{color:var(--cyan);font-family:var(--font-mono);font-size:.875rem;flex:none}
-.cmd__text{
-  font-family:var(--font-mono);font-size:clamp(.7rem,1.9vw,.875rem);
-  color:var(--ink);overflow-x:auto;white-space:pre;flex:1;min-width:0;scrollbar-width:none;
-}
-.cmd__text::-webkit-scrollbar{display:none}
-.cmd__copy{
-  flex:none;font-family:var(--font-mono);font-size:.6875rem;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--ink-3);
-  background:transparent;border:1px solid var(--line);border-radius:5px;
-  padding:.35rem .6rem;cursor:pointer;transition:color .15s,border-color .15s;
-}
-.cmd__copy:hover{color:var(--cyan);border-color:var(--cyan)}
-.cmd__copy[data-done="1"]{color:var(--green);border-color:var(--green)}
-
-/* ── install paths ────────────────────────────────────────────────── */
-/* stacked, never side by side — the recipe's longest line is ~90 chars and
-   goes unreadable in a half-width column */
-.ways{display:grid;gap:clamp(2.5rem,5vw,3.5rem);margin-top:2.5rem;max-width:56rem}
-.way{min-width:0}
-.way__label{
-  font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;
-  text-transform:uppercase;color:var(--cyan);margin:0 0 1rem;
-  display:flex;align-items:center;gap:.7rem;
-}
-.way__label::before{content:'';width:1.75rem;height:1px;background:currentColor;opacity:.55;flex:none}
-.way__note{margin:1.1rem 0 0;color:var(--ink-2);font-size:var(--text-sm);max-width:62ch}
-.way__note code{font-family:var(--font-mono);font-size:.85em;color:var(--ink)}
-.way__note a{color:var(--cyan);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--cyan) 35%,transparent)}
-.way__note a:hover{border-bottom-color:var(--cyan)}
-
-.code{border:1px solid var(--line);border-radius:8px;background:var(--ground-2);overflow:hidden;min-width:0}
-.code__bar{
-  display:flex;align-items:center;justify-content:space-between;gap:1rem;
-  padding:.5rem .6rem .5rem 1.25rem;border-bottom:1px solid var(--line-soft);
-  font-family:var(--font-mono);font-size:.6875rem;letter-spacing:.13em;
-  text-transform:uppercase;color:var(--ink-3);
-}
-.code__copy{
-  flex:none;font-family:var(--font-mono);font-size:.6875rem;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--ink-3);
-  background:transparent;border:1px solid var(--line);border-radius:5px;
-  padding:.3rem .55rem;cursor:pointer;transition:color .15s,border-color .15s;
-}
-.code__copy:hover{color:var(--cyan);border-color:var(--cyan)}
-.code__copy[data-done="1"]{color:var(--green);border-color:var(--green)}
-.code pre{
-  margin:0;padding:1.15rem 1.25rem;overflow-x:auto;
-  font-family:var(--font-mono);font-size:clamp(.72rem,1.7vw,.8125rem);
-  line-height:1.85;color:var(--ink);scrollbar-width:thin;
-}
-.code pre .s{color:var(--green)}
-.code pre .c{color:var(--ink-3)}
-
-.drop{margin-top:1.4rem;border-top:1px solid var(--line-soft);padding-top:1.2rem}
-.drop summary{
-  font-family:var(--font-mono);font-size:.75rem;letter-spacing:.06em;
-  color:var(--ink-3);cursor:pointer;list-style:none;
-  display:flex;align-items:center;gap:.55rem;
-}
-.drop summary::-webkit-details-marker{display:none}
-.drop summary::before{content:'+';color:var(--cyan);font-size:.95rem;line-height:1}
-.drop[open] summary::before{content:'−'}
-.drop summary:hover{color:var(--ink-2)}
-.drop .code{margin-top:1.2rem}
-
-/* ── anatomy ──────────────────────────────────────────────────────── */
-.seg{
-  display:grid;grid-template-columns:minmax(0,1fr);gap:.5rem 2rem;
-  padding:1.4rem 0;
-  border-top:1px solid var(--line-soft);
-}
-.seg:last-child{border-bottom:1px solid var(--line-soft)}
-@media(min-width:860px){
-  .seg{grid-template-columns:minmax(0,25rem) minmax(0,1fr);align-items:baseline}
-}
-.seg__code{
-  font-family:var(--font-mono);font-size:clamp(.75rem,1.8vw,.9375rem);
-  white-space:pre;overflow-x:auto;scrollbar-width:none;
-}
-.seg__code::-webkit-scrollbar{display:none}
-.seg__name{
-  font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;
-  text-transform:uppercase;color:var(--ink-3);margin:0 0 .3rem;
-}
-.seg__text{margin:0;color:var(--ink-2);font-size:var(--text-sm)}
-.seg__text code{
-  font-family:var(--font-mono);font-size:.85em;color:var(--ink);
-  background:var(--ground-2);border:1px solid var(--line-soft);
-  border-radius:4px;padding:.05em .35em;
-}
-
-/* ── thresholds ───────────────────────────────────────────────────── */
-.ramp{display:grid;gap:1rem;margin-top:2.5rem}
-@media(min-width:760px){.ramp{grid-template-columns:repeat(3,1fr);gap:1.25rem}}
-.step{
-  border:1px solid var(--line);border-radius:9px;
-  background:var(--ground-2);padding:1.25rem 1.25rem 1.4rem;
-}
-.step__bar{font-family:var(--font-mono);font-size:1.125rem;line-height:1.4;white-space:pre}
-.step__label{
-  font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;
-  text-transform:uppercase;color:var(--ink-3);margin:.85rem 0 .45rem;
-}
-.step__label code{text-transform:none;font-family:var(--font-mono);letter-spacing:.04em}
-.step__text{margin:0;font-size:var(--text-sm);color:var(--ink-2)}
-
-/* ── tabs ─────────────────────────────────────────────────────────── */
-.tabs{margin-top:2.5rem;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--ground-2)}
-.tabs__list{display:flex;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:none}
-.tabs__list::-webkit-scrollbar{display:none}
-.tab{
-  flex:none;font-family:var(--font-mono);font-size:.75rem;letter-spacing:.08em;
-  color:var(--ink-3);background:transparent;border:0;
-  border-bottom:2px solid transparent;
-  padding:.85rem 1.15rem;cursor:pointer;white-space:nowrap;transition:color .15s;
-}
-.tab:hover{color:var(--ink-2)}
-.tab[aria-selected="true"]{color:var(--cyan);border-bottom-color:var(--cyan)}
-.panel{padding:1.4rem clamp(1rem,3vw,1.6rem) 1.6rem}
-.panel[hidden]{display:none}
-.panel pre{
-  margin:0;overflow-x:auto;
-  font-family:var(--font-mono);font-size:clamp(.75rem,1.8vw,.8125rem);
-  line-height:1.75;color:var(--ink-2);
-}
-.panel pre .k{color:var(--cyan)}
-.panel pre .v{color:var(--green)}
-.panel pre .c{color:var(--ink-3)}
-.panel pre .s{color:var(--yellow)}
-.panel__note{margin:1.2rem 0 0;font-size:var(--text-sm);color:var(--ink-3);max-width:60ch}
-
-.vars{display:grid;gap:0;margin:0}
-@media(min-width:700px){.vars{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:2.5rem}}
-.var{display:flex;justify-content:space-between;gap:1rem;padding:.55rem 0;border-bottom:1px solid var(--line-soft)}
-.var dt{font-family:var(--font-mono);font-size:.8125rem;color:var(--ink)}
-.var dd{margin:0;font-family:var(--font-mono);font-size:.8125rem;color:var(--ink-3);text-align:right;flex:none}
-
-.ph{display:flex;flex-wrap:wrap;gap:.4rem;margin:0}
-.ph span{
-  font-family:var(--font-mono);font-size:.75rem;color:var(--ink-2);
-  border:1px solid var(--line);border-radius:5px;padding:.25rem .5rem;
-  background:var(--ground);
-}
-
-/* ── footer ───────────────────────────────────────────────────────── */
-.foot{border-top:1px solid var(--line-soft);padding-block:2.5rem 3.5rem}
-.foot__in{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:center;justify-content:space-between}
-.foot p{margin:0;font-family:var(--font-mono);font-size:.75rem;color:var(--ink-3)}
-.foot a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line)}
-.foot a:hover{color:var(--cyan);border-bottom-color:var(--cyan)}
-
-/* ── motion ───────────────────────────────────────────────────────── */
-.reveal{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s ease}
-.reveal.is-in{opacity:1;transform:none}
-@media(prefers-reduced-motion:reduce){
-  *{animation:none!important;transition:none!important}
-  .reveal{opacity:1;transform:none}
-}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -380,7 +32,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
       <a href="#anatomy" class="is-hidden-xs">Anatomy</a>
       <a href="#thresholds" class="is-hidden-sm">Thresholds</a>
       <a href="#configure" class="is-hidden-sm">Configure</a>
-      <a href="#plugins" class="is-hidden-xs">Plugins</a>
+      <a href="plugins/" class="is-hidden-xs">Plugins</a>
       <a href="#install">Install</a>
       <a href="https://github.com/williamokano/claude-status-line-go">GitHub&nbsp;↗</a>
     </div>
@@ -586,7 +238,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
 <span class="k">ctx_crit</span>:       <span class="v">85</span>
 <span class="k">weekly_show_at</span>: <span class="v">60</span>   <span class="c"># reveal the weekly bar at this %</span></pre>
           <p class="panel__note">
-            <a href="#plugins">Plugins</a> live in this file too. Precedence runs
+            <a href="plugins/">Plugins</a> live in this file too. Precedence runs
             defaults, then this file, then the environment — so a
             <code style="font-family:var(--font-mono)">CSL_</code> variable always wins.
           </p>
@@ -643,6 +295,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
 
   <!-- ── plugins ──────────────────────────────────────────────────── -->
+  <!-- ── plugins (teaser; the full story lives at /plugins/) ──────── -->
   <section class="section" id="plugins">
     <div class="wrap">
       <p class="eyebrow">Plugins</p>
@@ -652,8 +305,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
         this tool draws it. So your segment gets the same glyphs, the same
         <code style="font-family:var(--font-mono)">bar_size</code> and the same
         <code style="font-family:var(--font-mono)">NO_COLOR</code> handling as
-        everything else on the line, rather than each plugin reinventing bars and
-        colors slightly differently.
+        everything else on the line.
       </p>
 
       <div class="sl reveal" style="margin-top:2.5rem;max-width:56rem">
@@ -666,11 +318,10 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
         </div>
       </div>
 
-      <div class="ways reveal">
-        <div class="way">
-          <p class="way__label">From a command</p>
-          <div class="code">
-            <div class="code__bar"><span>claude-status-line.yaml</span></div>
+      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
+        <p class="way__label">Roughly this</p>
+        <div class="code">
+          <div class="code__bar"><span>claude-status-line.yaml</span></div>
 <pre><span class="k">plugins</span>:
   - <span class="k">name</span>: <span class="v">issues</span>
     <span class="k">command</span>: <span class="c">&gt;-</span>
@@ -678,177 +329,20 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
       <span class="s">"$(gh issue list --json number --jq 'length')"</span>
     <span class="k">interval</span>: <span class="v">60s</span>
     <span class="k">icon</span>: <span class="s">"🎯"</span>
-    <span class="k">bar</span>: <span class="v">true</span>
-    <span class="k">thresholds</span>:
-      - { <span class="k">at</span>: <span class="v">0</span>,  <span class="k">color</span>: <span class="v">green</span> }
-      - { <span class="k">at</span>: <span class="v">40</span>, <span class="k">color</span>: <span class="v">yellow</span> }
-      - { <span class="k">at</span>: <span class="v">70</span>, <span class="k">color</span>: <span class="v">red</span> }</pre>
-          </div>
-          <p class="way__note">
-            A command never runs while the status line is drawing. Its result is
-            cached; a render reads that and, when it's older than
-            <code>interval</code>, hands the work to a detached process and draws
-            the stale value straight away. A 350&nbsp;ms
-            <code>gh</code> call costs the line nothing — it just means the number
-            can be up to <code>interval</code> old.
-          </p>
-          <p class="way__note">
-            <code>thresholds</code> is a list, and <code>at</code> is a lower bound
-            in percent. There's no invert flag: for a ramp where more is better,
-            write the colors the other way round.
-          </p>
+    <span class="k">bar</span>: <span class="v">true</span></pre>
         </div>
-
-        <div class="way">
-          <p class="way__label">From a file</p>
-          <div class="code">
-            <div class="code__bar"><span>claude-status-line.yaml</span></div>
-<pre><span class="k">plugins</span>:
-  - <span class="k">name</span>: <span class="v">spec</span>
-    <span class="k">file</span>: <span class="v">.claude/spec-state.json</span>
-    <span class="k">icon</span>: <span class="s">"🧩"</span>
-    <span class="k">bar</span>: <span class="v">true</span>
-    <span class="k">display</span>: <span class="s">"{icon} {label} {bar} {value}/{max}"</span>
-    <span class="k">hide_when</span>: <span class="v">zero</span>   <span class="c"># nothing left to do, so say nothing</span></pre>
-          </div>
-          <p class="way__note">
-            Read straight off disk, so it costs nothing at all. This is the one to
-            reach for when something already writes the data — a Claude Code hook
-            firing on the event that changes it beats polling for it.
-          </p>
-          <p class="way__note">
-            <code>hide_when</code> keeps counters out of the way when they've
-            nothing to say: <code>zero</code> when the value is 0,
-            <code>full</code> when it reaches its maximum.
-          </p>
-        </div>
-      </div>
-
-      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
-        <p class="way__label">What a slow command actually does</p>
-        <p class="way__note" style="margin-top:0">
-          Five consecutive renders with a command that takes 800&nbsp;ms, timed on
-          a real terminal. The command never lands on the render path, so the cost
-          of the status line doesn't move.
-        </p>
-
-        <div style="margin-top:1.4rem">
-          <div class="seg">
-            <div class="seg__code"><span class="dim">1 ·</span> <span class="ok">4 ms</span> <span class="dim">· (nothing)</span></div>
-            <div>
-              <p class="seg__name">Cold</p>
-              <p class="seg__text">No cached value, so no segment. The render hands the command to a detached process and exits without waiting.</p>
-            </div>
-          </div>
-          <div class="seg">
-            <div class="seg__code"><span class="dim">2 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
-            <div>
-              <p class="seg__name">First value</p>
-              <p class="seg__text">The background run finished, so the cache has something to draw.</p>
-            </div>
-          </div>
-          <div class="seg">
-            <div class="seg__code"><span class="dim">3 ·</span> <span class="ok">3 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
-            <div>
-              <p class="seg__name">Fresh</p>
-              <p class="seg__text">Inside <code>interval</code>, so nothing is spawned at all — this is a file read and no more.</p>
-            </div>
-          </div>
-          <div class="seg">
-            <div class="seg__code"><span class="dim">4 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
-            <div>
-              <p class="seg__name">Stale</p>
-              <p class="seg__text">Past <code>interval</code>. The <em>old</em> value is drawn immediately and a refresh starts behind it — you never wait 800&nbsp;ms for a number.</p>
-            </div>
-          </div>
-          <div class="seg">
-            <div class="seg__code"><span class="dim">5 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 ██░░░░░░░░ 2/10</div>
-            <div>
-              <p class="seg__name">Caught up</p>
-              <p class="seg__text">The refresh landed, so the next render shows it. The trade is that a number can be up to <code>interval</code> old — never that the line is slow.</p>
-            </div>
-          </div>
-        </div>
-
         <p class="way__note">
-          If the command fails, the last good value stays on screen rather than the
-          segment vanishing. If it has never succeeded, there's simply nothing to draw.
+          A command never runs while the status line is drawing — its result is
+          cached and refreshed behind you, so a 350&nbsp;ms
+          <code>gh</code> call costs the line nothing.
         </p>
       </div>
 
-      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
-        <p class="way__label">A real one, start to finish</p>
-        <p class="way__note" style="margin-top:0">
-          Commits you haven't pushed. No API tokens, no setup — it works in any git
-          repo, and <code>hide_when: zero</code> means it's invisible until you're
-          actually behind.
-        </p>
-        <div class="code" style="margin-top:1.4rem">
-          <div class="code__bar">
-            <span>claude-status-line.yaml</span>
-            <button class="code__copy" type="button" data-copy-from="#recipe-unpushed">Copy</button>
-          </div>
-<pre id="recipe-unpushed"><span class="k">plugins</span>:
-  - <span class="k">name</span>: <span class="v">unpushed</span>
-    <span class="k">command</span>: <span class="c">&gt;-</span>
-      <span class="s">printf '{"value":%s,"max":20,"label":"unpushed"}'</span>
-      <span class="s">"$(git log --oneline @{u}.. 2&gt;/dev/null | wc -l)"</span>
-    <span class="k">interval</span>: <span class="v">30s</span>
-    <span class="k">icon</span>: <span class="s">"⬆"</span>
-    <span class="k">bar</span>: <span class="v">true</span>
-    <span class="k">hide_when</span>: <span class="v">zero</span>
-    <span class="k">thresholds</span>:
-      - { <span class="k">at</span>: <span class="v">0</span>,  <span class="k">color</span>: <span class="v">green</span> }
-      - { <span class="k">at</span>: <span class="v">25</span>, <span class="k">color</span>: <span class="v">yellow</span> }
-      - { <span class="k">at</span>: <span class="v">50</span>, <span class="k">color</span>: <span class="v">red</span> }</pre>
-        </div>
-        <div class="sl" style="margin-top:1.4rem">
-          <div class="sl__bar"><span>Three commits behind, then in sync</span></div>
-          <div class="sl__body">
-            <div class="sl__scroll">
-              <p class="sl__line"><span class="ok">🟡5h ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">CTX ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">⬆ █░░░░░░░░░ 3/20</span><span class="dim"> │ </span><span class="money">$0.00</span></p>
-              <p class="sl__line"><span class="ok">🟡5h ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">CTX ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="money">$0.00</span></p>
-            </div>
-          </div>
-        </div>
-        <p class="way__note">
-          The second line is the same plugin after pushing: at zero it takes no
-          space at all. Outside a git repo, or on a branch with no upstream, the
-          count is zero and the segment stays hidden — no error, no noise.
-        </p>
-      </div>
-
-      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
-        <p class="way__label">When one doesn't show up</p>
-        <div class="cmds" style="margin-top:0;max-width:34rem">
-          <div class="cmd">
-            <span class="cmd__prompt" aria-hidden="true">$</span>
-            <code class="cmd__text">claude-status-line-go plugins</code>
-            <button class="cmd__copy" type="button" data-copy="claude-status-line-go plugins">Copy</button>
-          </div>
-        </div>
-        <p class="way__note">
-          Claude Code discards this tool's stderr, so a plugin that fails has
-          nowhere to say so — it just doesn't appear. This prints each plugin's
-          source, cache age and the segment it renders.
-          <code>plugins refresh</code> runs the commands in the foreground and
-          shows you the error.
-        </p>
-        <p class="way__note">
-          Cached values are per plugin and per project, so they build up as you
-          move between repos. Every background refresh prunes the ones that can't
-          matter any more — plugins you've removed, anything untouched for a
-          fortnight — and <code>plugins clean</code> does it on demand.
-        </p>
-      </div>
-
-      <p class="note note--sm reveal" style="margin-top:2.75rem">
-        A plugin emits JSON on stdout —
-        <code style="font-family:var(--font-mono);font-size:.85em">{"value": 12, "max": 33, "label": "aplicar"}</code>
-        — and bare text counts too, so <code style="font-family:var(--font-mono)">echo "12 left"</code>
-        is a valid plugin. Any key outside the contract is reachable as
-        <code style="font-family:var(--font-mono)">{plugin.name.key}</code>, which is how
-        one plugin reports several things at once.
+      <p class="note note--sm reveal" style="margin-top:2.25rem">
+        <a href="plugins/">Read the full plugin guide →</a> — both source kinds, the
+        output contract, thresholds, <code style="font-family:var(--font-mono)">hide_when</code>,
+        a worked example, what a slow command does turn by turn, and how to debug one
+        that won't show up.
       </p>
     </div>
   </section>
@@ -1001,152 +495,6 @@ tar -xzf $File -C $Dest claude-status-line-go.exe</pre>
   </div>
 </footer>
 
-<script>
-(function(){
-  'use strict';
-
-  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  /* ── divider rows, sized to the element ──────────────────────── */
-  function fillRules(){
-    document.querySelectorAll('.rule').forEach(function(el){
-      var n = Math.ceil(el.clientWidth / 8) + 4;
-      el.textContent = '░'.repeat(n);
-    });
-  }
-  fillRules();
-  window.addEventListener('resize', fillRules);
-
-  /* ── the right-edge fade only earns its place when there's more to see ── */
-  var scroller = document.querySelector('.sl__scroll'),
-      fade = document.querySelector('.sl__fade');
-  function syncFade(){
-    fade.style.opacity = scroller.scrollWidth > scroller.clientWidth + 2 ? '1' : '0';
-  }
-  syncFade();
-  window.addEventListener('resize', syncFade);
-  scroller.addEventListener('scroll', syncFade);
-
-  /* ── copy buttons ────────────────────────────────────────────── */
-  document.querySelectorAll('[data-copy],[data-copy-from]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var text = btn.dataset.copy != null
-        ? btn.dataset.copy
-        : document.querySelector(btn.dataset.copyFrom).textContent;
-      navigator.clipboard.writeText(text).then(function(){
-        btn.textContent = 'Copied';
-        btn.dataset.done = '1';
-        setTimeout(function(){ btn.textContent = 'Copy'; delete btn.dataset.done; }, 1600);
-      });
-    });
-  });
-
-  /* ── tabs — each list is independent of the others ───────────── */
-  document.querySelectorAll('.tabs__list').forEach(function(list){
-    var tabs = Array.prototype.slice.call(list.querySelectorAll('.tab'));
-    function select(i){
-      tabs.forEach(function(t, j){
-        var on = i === j;
-        t.setAttribute('aria-selected', on ? 'true' : 'false');
-        t.tabIndex = on ? 0 : -1;
-        document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
-      });
-    }
-    tabs.forEach(function(t, i){
-      t.addEventListener('click', function(){ select(i); });
-      t.addEventListener('keydown', function(e){
-        var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-        if (!d) return;
-        e.preventDefault();
-        var n = (i + d + tabs.length) % tabs.length;
-        select(n);
-        tabs[n].focus();
-      });
-    });
-  });
-
-  /* Open the Windows tab for Windows visitors. macOS/Linux stays the default,
-     so a failed guess still lands on the tab that covers two of three. */
-  var winTab = document.getElementById('tab-win');
-  if (winTab) {
-    var plat = (navigator.userAgentData && navigator.userAgentData.platform) ||
-               navigator.platform || navigator.userAgent || '';
-    if (/win/i.test(plat)) winTab.click();
-  }
-
-  /* ── scroll reveal ───────────────────────────────────────────── */
-  var reveals = document.querySelectorAll('.reveal');
-  if (reduce || !('IntersectionObserver' in window)) {
-    reveals.forEach(function(el){ el.classList.add('is-in'); });
-  } else {
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(en){
-        if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); }
-      });
-    }, { rootMargin: '0px 0px -12% 0px' });
-    reveals.forEach(function(el){ io.observe(el); });
-  }
-
-  /* ── the status line itself ──────────────────────────────────── */
-  var BAR = 10, LOOP = 26000;
-  var five = document.getElementById('five'),
-      ctx = document.getElementById('ctx'),
-      tokens = document.getElementById('tokens'),
-      weekly = document.getElementById('weekly'),
-      weeklyInner = document.getElementById('weeklyInner'),
-      cost = document.getElementById('cost'),
-      scrub = document.getElementById('scrub');
-
-  function bar(pct){
-    var f = Math.round(pct / 100 * BAR);
-    return '█'.repeat(f) + '░'.repeat(BAR - f);
-  }
-  function level(pct, warn, crit){
-    return pct >= crit ? 'crit' : pct >= warn ? 'warn' : 'ok';
-  }
-  function k(n){
-    return n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n));
-  }
-  function hm(mins){
-    var t = Math.round(mins), h = Math.floor(t / 60), m = t % 60;
-    return h > 0 ? h + 'h' + m + 'm' : m + 'm';
-  }
-
-  function frame(p){
-    var e = p * p * (3 - 2 * p);              // smoothstep
-
-    var f = 92 * e;
-    five.className = level(f, 60, 85);
-    five.textContent = '🟡5h ' + bar(f) + ' ' + Math.round(f) + '% ↺ ' + hm(300 - 278 * e);
-
-    var c = 71 * e;
-    ctx.className = level(c, 60, 85);
-    ctx.textContent = 'CTX ' + bar(c) + ' ' + Math.round(c) + '%';
-
-    var hit = p < 0.12 ? 0 : Math.min(99, (p - 0.12) / 0.3 * 99);
-    tokens.textContent = 'Σ' + k(115000 * e) + ' ↓' + k(277 * e) + ' ⚡' + Math.round(hit) + '%';
-
-    var w = 74 * e;
-    weeklyInner.className = level(w, 60, 85);
-    weeklyInner.textContent = '📅7d ' + bar(w) + ' ' + Math.round(w) + '% ↺ 2d4h';
-    weekly.classList.toggle('is-on', w >= 60);   // weekly_show_at
-
-    cost.textContent = '$' + (7.92 * e).toFixed(2);
-    scrub.textContent = '█'.repeat(Math.round(p * 24)) + '░'.repeat(24 - Math.round(p * 24));
-  }
-
-  if (reduce) {
-    frame(1);
-  } else {
-    var t0 = null;
-    requestAnimationFrame(function step(ts){
-      if (t0 === null) t0 = ts;
-      var p = ((ts - t0) % LOOP) / LOOP;
-      frame(p < 0.88 ? p / 0.88 : 1);          // fill, then hold before looping
-      requestAnimationFrame(step);
-    });
-  }
-})();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
