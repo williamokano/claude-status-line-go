@@ -21,9 +21,16 @@ type Spec struct {
 	Name string `yaml:"name"`
 
 	// Exactly one source. File is read directly and costs nothing at render
-	// time; Command is reserved for the cached/background-refresh path.
+	// time; Command is cached and refreshed out of band, so a slow command
+	// never lands on the render path.
 	File    string `yaml:"file"`
 	Command string `yaml:"command"`
+
+	// Interval is how long a command's cached result stays fresh (default 60s).
+	// Timeout caps one run of the command (default 5s). Both are Go durations:
+	// "30s", "2m".
+	Interval string `yaml:"interval"`
+	Timeout  string `yaml:"timeout"`
 
 	Icon    string `yaml:"icon"`
 	Bar     bool   `yaml:"bar"`
@@ -121,7 +128,9 @@ func (s Spec) Load() (Output, error) {
 		}
 		return Parse(b)
 	case s.Command != "":
-		return Output{Hide: true}, fmt.Errorf("plugin %q: command sources are not implemented yet", s.Name)
+		// Command sources go through Resolve, which reads the cache instead of
+		// running anything. Load is the file path only.
+		return Output{Hide: true}, fmt.Errorf("plugin %q: command sources resolve through the cache, not Load", s.Name)
 	default:
 		return Output{}, fmt.Errorf("plugin %q: needs a file or command source", s.Name)
 	}

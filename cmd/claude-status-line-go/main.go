@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"io"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -65,7 +66,16 @@ func main() {
 	completion := flag.String("completion", "", "print shell completion script (bash|zsh|fish)")
 	project := flag.Bool("project", false, "with install: register in ./.claude/settings.json instead of the global settings")
 
+	// Not for people to type: a render spawns this to refresh one plugin's
+	// cache out of band, so the command never runs on the render path.
+	refreshPlugin := flag.String("refresh-plugin", "", "")
+	_ = flag.CommandLine.MarkHidden("refresh-plugin")
+
 	flag.Parse()
+
+	if *refreshPlugin != "" {
+		os.Exit(runRefresh(*refreshPlugin))
+	}
 
 	if *showVersion {
 		fmt.Printf("claude-status-line-go %s\n", resolveVersion())
@@ -102,6 +112,38 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// runRefresh is the detached half of a command plugin: run it, cache the
+// result, exit. Nobody is waiting on this, so failures go to stderr and the
+// exit code exists only for anyone debugging by hand.
+func runRefresh(name string) int {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
+		return 1
+	}
+
+	input, _ := io.ReadAll(os.Stdin)
+
+	dir := os.Getenv("CSL_PROJECT_DIR")
+	if dir == "" {
+		dir, _ = os.Getwd()
+	}
+
+	for _, spec := range cfg.Plugins {
+		if spec.Name != name {
+			continue
+		}
+		if err := spec.Refresh(dir, input); err != nil {
+			fmt.Fprintf(os.Stderr, "claude-status-line-go: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
+	fmt.Fprintf(os.Stderr, "claude-status-line-go: no plugin named %q\n", name)
+	return 1
 }
 
 func runInstall(project bool) {

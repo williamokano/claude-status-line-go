@@ -71,6 +71,10 @@ const (
 
 type Service struct {
 	cfg config.Config
+
+	// raw is the stdin payload, handed to command plugins so they see the same
+	// session data this tool does.
+	raw []byte
 }
 
 // view holds every value the renderers need, already formatted and colored.
@@ -127,6 +131,7 @@ func (s *Service) Run() error {
 	}
 
 	data, _ := io.ReadAll(os.Stdin)
+	s.raw = data
 
 	var input Input
 	if err := json.Unmarshal(data, &input); err != nil {
@@ -190,13 +195,28 @@ func (s *Service) buildView(input Input) view {
 
 		cost: input.Cost.TotalCostUSD,
 
-		plugins: s.buildPlugins(),
+		plugins: s.buildPlugins(projectDir(input)),
 	}
 }
 
-// loadPlugin is a variable so tests can swap in a deliberately slow loader and
-// prove buildPlugins fans out rather than serialising.
-var loadPlugin = func(spec plugin.Spec) (plugin.Output, error) { return spec.Load() }
+// projectDir is what plugins are keyed and run against. Claude Code doesn't
+// always report project_dir, so fall back to the working directory.
+func projectDir(input Input) string {
+	if input.Workspace.ProjectDir != "" {
+		return input.Workspace.ProjectDir
+	}
+	return input.Workspace.CurrentDir
+}
+
+// resolvePlugin and spawnRefresh are variables so tests can swap in a slow
+// resolver to prove the fan-out, and observe refreshes without starting
+// processes.
+var (
+	resolvePlugin = func(spec plugin.Spec, projectDir string) (plugin.Output, bool, error) {
+		return spec.Resolve(projectDir)
+	}
+	spawnRefresh = plugin.SpawnRefresh
+)
 
 // buildPlugins resolves every configured plugin concurrently. Reading a file
 // is fast enough that serialising wouldn't show up today, but command sources
@@ -205,16 +225,17 @@ var loadPlugin = func(spec plugin.Spec) (plugin.Output, error) { return spec.Loa
 //
 // A plugin that errors or has nothing to say is dropped: a broken segment must
 // never cost you the rest of the status line.
-func (s *Service) buildPlugins() []pluginView {
+func (s *Service) buildPlugins(projectDir string) []pluginView {
 	specs := s.cfg.Plugins
 	if len(specs) == 0 {
 		return nil
 	}
 
 	type result struct {
-		pv  pluginView
-		err error
-		ok  bool
+		pv      pluginView
+		err     error
+		ok      bool
+		refresh bool
 	}
 
 	// Each goroutine owns one index, so no mutex is needed to fill this.
@@ -226,7 +247,8 @@ func (s *Service) buildPlugins() []pluginView {
 		go func() {
 			defer wg.Done()
 
-			data, err := loadPlugin(spec)
+			data, needsRefresh, err := resolvePlugin(spec, projectDir)
+			results[i].refresh = needsRefresh
 			if err != nil {
 				results[i].err = err
 				return
@@ -240,10 +262,21 @@ func (s *Service) buildPlugins() []pluginView {
 			if stripANSI(pv.render) == "" {
 				return
 			}
-			results[i] = result{pv: pv, ok: true}
+			results[i].pv, results[i].ok = pv, true
 		}()
 	}
 	wg.Wait()
+
+	// Kick off refreshes after rendering has everything it needs. Each one is
+	// a detached process, so this costs a fork and nothing else — we never
+	// wait for the result, we just make sure the next render has a fresher one.
+	for i, r := range results {
+		if r.refresh {
+			if err := spawnRefresh(specs[i].Name, projectDir, s.raw); err != nil {
+				fmt.Fprintf(os.Stderr, "claude-status-line-go: plugin %q: refresh: %v\n", specs[i].Name, err)
+			}
+		}
+	}
 
 	// Walk the specs, not the completion order: goroutines finish whenever
 	// they finish, but segments must appear in the order they were configured
