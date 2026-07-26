@@ -59,6 +59,16 @@ func parseDuration(raw string, def time.Duration, name, field string) time.Durat
 	return d
 }
 
+// CacheAge is how long ago this plugin's cached value was written, for the
+// `plugins` command. ok is false when there's no usable cache yet.
+func (s Spec) CacheAge(projectDir string) (time.Duration, bool) {
+	e, err := readCache(s.CachePath(projectDir))
+	if err != nil {
+		return 0, false
+	}
+	return time.Since(time.Unix(e.FetchedAt, 0)), true
+}
+
 // Resolve produces the segment data for this render. needsRefresh reports that
 // the caller should kick off a background refresh; it never means "wait".
 func (s Spec) Resolve(projectDir string) (out Output, needsRefresh bool, err error) {

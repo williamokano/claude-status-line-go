@@ -710,6 +710,24 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
         </div>
       </div>
 
+      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
+        <p class="way__label">When one doesn't show up</p>
+        <div class="cmds" style="margin-top:0;max-width:34rem">
+          <div class="cmd">
+            <span class="cmd__prompt" aria-hidden="true">$</span>
+            <code class="cmd__text">claude-status-line-go plugins</code>
+            <button class="cmd__copy" type="button" data-copy="claude-status-line-go plugins">Copy</button>
+          </div>
+        </div>
+        <p class="way__note">
+          Claude Code discards this tool's stderr, so a plugin that fails has
+          nowhere to say so — it just doesn't appear. This prints each plugin's
+          source, cache age and the segment it renders.
+          <code>plugins refresh</code> runs the commands in the foreground and
+          shows you the error.
+        </p>
+      </div>
+
       <p class="note reveal" style="margin-top:2.75rem">
         A plugin emits JSON on stdout —
         <code style="font-family:var(--font-mono);font-size:.85em">{"value": 12, "max": 33, "label": "aplicar"}</code>

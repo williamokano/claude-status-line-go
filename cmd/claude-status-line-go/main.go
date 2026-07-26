@@ -97,6 +97,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	if flag.Arg(0) == "plugins" {
+		os.Exit(runPlugins(flag.Args()[1:]))
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
@@ -112,6 +116,93 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// runPlugins reports what each configured plugin is doing. Claude Code
+// discards this tool's stderr, so a plugin that fails silently has nowhere to
+// say so — this is where you find out.
+func runPlugins(args []string) int {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
+		return 1
+	}
+
+	dir, _ := os.Getwd()
+
+	if len(args) > 0 && args[0] == "refresh" {
+		return refreshPlugins(cfg, dir, args[1:])
+	}
+	if len(args) > 0 {
+		fmt.Fprintf(os.Stderr, "Unknown: plugins %s (try: plugins, plugins refresh [name])\n", args[0])
+		return 1
+	}
+
+	if len(cfg.Plugins) == 0 {
+		fmt.Printf("No plugins configured in %s\n", config.Path())
+		return 0
+	}
+
+	fmt.Printf("%s\n\n", config.Path())
+	for _, p := range service.New(cfg).InspectPlugins(dir) {
+		state := p.State
+		switch {
+		case p.Source != "command":
+		case p.Age == "":
+			state += " — the command has not run yet, so the next render will start it"
+		case p.Stale:
+			state += ", cached " + p.Age + " ago (stale; the next render refreshes it)"
+		default:
+			state += ", cached " + p.Age + " ago"
+		}
+
+		fmt.Printf("%s  [%s]\n", p.Name, p.Source)
+		fmt.Printf("  source   %s\n", p.Detail)
+		fmt.Printf("  state    %s\n", state)
+		if p.Rendered != "" {
+			fmt.Printf("  renders  %s\n", p.Rendered)
+		}
+		if p.Err != "" {
+			fmt.Printf("  error    %s\n", p.Err)
+		}
+		fmt.Println()
+	}
+	return 0
+}
+
+// refreshPlugins runs command plugins in the foreground and reports the result,
+// so a broken command shows its error instead of leaving an empty segment.
+func refreshPlugins(cfg config.Config, dir string, names []string) int {
+	wanted := map[string]bool{}
+	for _, n := range names {
+		wanted[n] = true
+	}
+
+	failed, ran := 0, 0
+	for _, spec := range cfg.Plugins {
+		if len(wanted) > 0 && !wanted[spec.Name] {
+			continue
+		}
+		if spec.Command == "" {
+			continue // file sources have nothing to refresh
+		}
+		ran++
+		if err := spec.Refresh(dir, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ %s: %v\n", spec.Name, err)
+			failed++
+			continue
+		}
+		fmt.Printf("✓ %s\n", spec.Name)
+	}
+
+	if ran == 0 {
+		fmt.Fprintln(os.Stderr, "No command plugins matched")
+		return 1
+	}
+	if failed > 0 {
+		return 1
+	}
+	return 0
 }
 
 // runRefresh is the detached half of a command plugin: run it, cache the
@@ -175,6 +266,12 @@ Reads Claude Code JSON from stdin and prints a formatted status line.
 Commands:
   install              register this binary as the Claude Code status line
                        by writing it into ~/.claude/settings.json
+  plugins              show each configured plugin, its state and what it
+                       renders — Claude Code hides stderr, so this is how
+                       you find out why a plugin isn't showing up
+  plugins refresh [name]
+                       run command plugins now, in the foreground, and
+                       report any errors
 
 Options:
   -h, --help              print this help
@@ -198,7 +295,12 @@ Environment variables:
   CSL_WEEKLY_SHOW_AT       show weekly when >= this %% (default: 60)
   NO_COLOR                 set to any value to disable ANSI colors
 
-See https://github.com/williamokano/claude-status-line-go
+Configuration file:
+  ~/.config/claude-status-line-go/claude-status-line.yaml
+  Holds the same settings, plus plugins that add your own segments.
+  Precedence is defaults, then this file, then the environment.
+
+See https://okano.dev/claude-status-line-go/
 `)
 }
 

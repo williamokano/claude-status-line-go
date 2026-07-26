@@ -145,15 +145,48 @@ func applyFile(cfg *Config, path string) error {
 		cfg.Format = *f.Format
 	}
 
-	for _, p := range f.Plugins {
-		if p.Name == "" {
-			fmt.Fprintf(os.Stderr, "claude-status-line-go: skipping a plugin with no name\n")
-			continue
-		}
-		cfg.Plugins = append(cfg.Plugins, p)
-	}
+	cfg.Plugins = append(cfg.Plugins, validPlugins(f.Plugins)...)
 
 	return nil
+}
+
+// validPlugins drops plugins that can't work and explains why. Everything here
+// is a config mistake that would otherwise fail silently at render time.
+func validPlugins(in []plugin.Spec) []plugin.Spec {
+	out := make([]plugin.Spec, 0, len(in))
+	seen := make(map[string]bool, len(in))
+
+	for _, p := range in {
+		switch {
+		case p.Name == "":
+			warn("skipping a plugin with no name")
+
+		case seen[p.Name]:
+			// Names key the cache file and the {plugin.<name>} placeholders, so
+			// a duplicate silently shares one cache with the first and makes
+			// its placeholders ambiguous.
+			warn("skipping a second plugin named %q — names must be unique", p.Name)
+
+		case p.File == "" && p.Command == "":
+			warn("skipping plugin %q — it needs a file or command source", p.Name)
+
+		case p.File != "" && p.Command != "":
+			warn("plugin %q sets both file and command; using command and ignoring file", p.Name)
+			p.File = ""
+			seen[p.Name] = true
+			out = append(out, p)
+
+		default:
+			seen[p.Name] = true
+			out = append(out, p)
+		}
+	}
+
+	return out
+}
+
+func warn(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "claude-status-line-go: "+format+"\n", args...)
 }
 
 func applyEnv(cfg *Config) {
