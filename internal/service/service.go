@@ -254,7 +254,7 @@ func (s *Service) buildPlugins(projectDir string) []pluginView {
 				results[i].err = err
 				return
 			}
-			if data.Hide {
+			if data.Hide || spec.ShouldHide(data) {
 				return
 			}
 
@@ -474,6 +474,10 @@ func (s *Service) InspectPlugins(projectDir string) []PluginStatus {
 			st.State, st.Err = "error", err.Error()
 		case data.Hide:
 			st.State = "no data"
+		case spec.ShouldHide(data):
+			// Say so explicitly — otherwise a working plugin that's correctly
+			// hidden looks identical to one that's broken.
+			st.State = fmt.Sprintf("hidden by hide_when: %s", spec.HideWhen)
 		default:
 			st.State = "ok"
 			st.Rendered = s.renderPlugin(spec, data, pluginFields(spec, data, s.cfg.BarSize))

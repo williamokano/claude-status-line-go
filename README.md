@@ -275,6 +275,25 @@ foreground and reports what went wrong:
 ✗ broken: plugin "broken": exit status 3: oh no
 ```
 
+### Cached values
+
+Command results are cached per plugin *and* per project, so they accumulate as
+you move between repos. They're pruned automatically — every background refresh
+also drops entries for plugins no longer in your config, entries untouched for
+over two weeks, and abandoned lock files. To do it on demand:
+
+```bash
+claude-status-line-go plugins clean
+```
+
+```
+Removed 1 entry for plugins no longer configured: deleted-plugin
+Removed 1 entry untouched for over 14 days: keep
+```
+
+Deleting a cached value costs nothing but one refresh the next time you're in
+that project.
+
 ### Limits
 
 Plugin output is capped at 64 KB, and a single rendered segment at 120
@@ -313,8 +332,20 @@ that's how one plugin reports several pieces of information.
 | `bar` | `false` | Draw a progress bar, using the global `bar_size` |
 | `display` | — | Layout template, e.g. `"{icon} {label} {bar} {value}/{max}"` |
 | `thresholds` | — | Colour stops, see below |
+| `hide_when` | — | `zero` drops the segment when the value is 0; `full` drops it when the value reaches `max` |
 | `interval` | `60s` | How long a `command` result stays fresh |
 | `timeout` | `5s` | Caps one run of a `command` |
+
+`hide_when` is for counters that aren't worth the space at rest — nothing left
+to do, or everything done:
+
+```yaml
+  - name: todo
+    file: .claude/todo.json
+    icon: "🎯"
+    bar: true
+    hide_when: zero      # no open items, so say nothing
+```
 
 `thresholds` is a list, where `at` is a lower bound in percent and each colour
 applies upward. There's no "invert" flag — for a ramp where more is better, list

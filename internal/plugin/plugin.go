@@ -36,6 +36,11 @@ type Spec struct {
 	Bar     bool   `yaml:"bar"`
 	Display string `yaml:"display"`
 
+	// HideWhen drops the segment for values that aren't worth the space:
+	// "zero" for a counter with nothing in it, "full" for one that's finished.
+	// Empty means always show.
+	HideWhen string `yaml:"hide_when"`
+
 	// Thresholds colour the segment by percentage. Ascending `at` values, each
 	// applying upward. A descending list is how you express an inverted ramp
 	// (more is better) without a separate flag.
@@ -142,6 +147,25 @@ func (s Spec) Load() (Output, error) {
 		return Output{Hide: true}, fmt.Errorf("plugin %q: command sources resolve through the cache, not Load", s.Name)
 	default:
 		return Output{}, fmt.Errorf("plugin %q: needs a file or command source", s.Name)
+	}
+}
+
+// ShouldHide reports whether hide_when applies to this result. A plugin that
+// reported no value is never hidden by it — there's nothing to compare.
+func (s Spec) ShouldHide(o Output) bool {
+	if o.Value == nil {
+		return false
+	}
+	switch s.HideWhen {
+	case "zero":
+		return *o.Value == 0
+	case "full":
+		return o.Max != nil && *o.Value >= *o.Max
+	case "", "never":
+		return false
+	default:
+		fmt.Fprintf(os.Stderr, "claude-status-line-go: plugin %q: unknown hide_when %q, ignoring\n", s.Name, s.HideWhen)
+		return false
 	}
 }
 

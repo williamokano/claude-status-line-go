@@ -100,16 +100,116 @@ func (s Spec) Resolve(projectDir string) (out Output, needsRefresh bool, err err
 var userCacheDir = os.UserCacheDir
 
 func (s Spec) CachePath(projectDir string) string {
-	base, err := userCacheDir()
-	if err != nil {
-		base = os.TempDir()
-	}
 	if projectDir == "" {
 		projectDir = "global"
 	}
 	sum := sha256.Sum256([]byte(projectDir))
-	file := fmt.Sprintf("%s-%s.json", sanitize(s.Name), hex.EncodeToString(sum[:])[:12])
-	return filepath.Join(base, "claude-status-line-go", "plugins", file)
+	file := fmt.Sprintf("%s-%s.json", sanitize(s.Name), hex.EncodeToString(sum[:])[:hashLen])
+	return filepath.Join(CacheDir(), file)
+}
+
+// hashLen is how much of the project-directory hash goes in a filename. It's
+// fixed so a name can be recovered from a filename when pruning.
+const hashLen = 12
+
+// CacheDir holds one file per plugin per project.
+func CacheDir() string {
+	base, err := userCacheDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	return filepath.Join(base, "claude-status-line-go", "plugins")
+}
+
+// MaxCacheAge is how long an untouched cache entry survives. Entries are per
+// project, so they pile up as you move between repos and never come back on
+// their own. Deleting one costs a single refresh the next time you're there.
+const MaxCacheAge = 14 * 24 * time.Hour
+
+// Pruned describes what a Prune removed.
+type Pruned struct {
+	Orphaned []string // plugins no longer in the config
+	Expired  []string // untouched for longer than maxAge
+}
+
+func (p Pruned) Total() int { return len(p.Orphaned) + len(p.Expired) }
+
+// Prune deletes cache entries that can't be useful any more: those belonging to
+// plugins the config no longer mentions, and those nothing has touched in
+// maxAge. Stale lock files go too, so a refresh killed mid-flight can't block
+// its plugin forever.
+func Prune(configured []string, maxAge time.Duration) (Pruned, error) {
+	var out Pruned
+
+	entries, err := os.ReadDir(CacheDir())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return out, nil // nothing cached yet
+		}
+		return out, err
+	}
+
+	known := make(map[string]bool, len(configured))
+	for _, n := range configured {
+		known[sanitize(n)] = true
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		path := filepath.Join(CacheDir(), e.Name())
+
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+
+		// A lock outliving any plausible refresh was abandoned.
+		if strings.HasSuffix(e.Name(), ".lock") {
+			if time.Since(info.ModTime()) > time.Hour {
+				os.Remove(path)
+			}
+			continue
+		}
+
+		name, ok := pluginNameFromFile(e.Name())
+		if !ok {
+			continue
+		}
+
+		switch {
+		case !known[name]:
+			if os.Remove(path) == nil {
+				out.Orphaned = append(out.Orphaned, name)
+			}
+		case time.Since(info.ModTime()) > maxAge:
+			if os.Remove(path) == nil {
+				out.Expired = append(out.Expired, name)
+			}
+		}
+	}
+
+	return out, nil
+}
+
+// pluginNameFromFile recovers the plugin name from "<name>-<12 hex>.json". The
+// hash is a fixed width, so a name containing dashes is still recoverable.
+func pluginNameFromFile(file string) (string, bool) {
+	base, ok := strings.CutSuffix(file, ".json")
+	if !ok || len(base) < hashLen+2 {
+		return "", false
+	}
+	cut := len(base) - hashLen - 1
+	if base[cut] != '-' {
+		return "", false
+	}
+	for _, r := range base[cut+1:] {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			return "", false
+		}
+	}
+	return base[:cut], true
 }
 
 // Refresh runs the command and replaces the cache. This is the detached
