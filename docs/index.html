@@ -217,6 +217,44 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
 .cmd__copy:hover{color:var(--cyan);border-color:var(--cyan)}
 .cmd__copy[data-done="1"]{color:var(--green);border-color:var(--green)}
 
+/* ── install paths ────────────────────────────────────────────────── */
+/* stacked, never side by side — the recipe's longest line is ~90 chars and
+   goes unreadable in a half-width column */
+.ways{display:grid;gap:clamp(2.5rem,5vw,3.5rem);margin-top:2.5rem;max-width:56rem}
+.way{min-width:0}
+.way__label{
+  font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--cyan);margin:0 0 1rem;
+  display:flex;align-items:center;gap:.7rem;
+}
+.way__label::before{content:'';width:1.75rem;height:1px;background:currentColor;opacity:.55;flex:none}
+.way__note{margin:1.1rem 0 0;color:var(--ink-2);font-size:.9375rem;max-width:62ch}
+.way__note code{font-family:var(--font-mono);font-size:.85em;color:var(--ink)}
+.way__note a{color:var(--cyan);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--cyan) 35%,transparent)}
+.way__note a:hover{border-bottom-color:var(--cyan)}
+
+.code{border:1px solid var(--line);border-radius:8px;background:var(--ground-2);overflow:hidden;min-width:0}
+.code__bar{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.5rem .6rem .5rem 1.25rem;border-bottom:1px solid var(--line-soft);
+  font-family:var(--font-mono);font-size:.6875rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.code__copy{
+  flex:none;font-family:var(--font-mono);font-size:.6875rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+  background:transparent;border:1px solid var(--line);border-radius:5px;
+  padding:.3rem .55rem;cursor:pointer;transition:color .15s,border-color .15s;
+}
+.code__copy:hover{color:var(--cyan);border-color:var(--cyan)}
+.code__copy[data-done="1"]{color:var(--green);border-color:var(--green)}
+.code pre{
+  margin:0;padding:1.15rem 1.25rem;overflow-x:auto;
+  font-family:var(--font-mono);font-size:clamp(.72rem,1.7vw,.8125rem);
+  line-height:1.85;color:var(--ink);scrollbar-width:thin;
+}
+.code pre .s{color:var(--green)}
+
 /* ── anatomy ──────────────────────────────────────────────────────── */
 .seg{
   display:grid;grid-template-columns:minmax(0,1fr);gap:.5rem 2rem;
@@ -572,37 +610,68 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   <section class="section" id="install">
     <div class="wrap">
       <p class="eyebrow">Install</p>
-      <h2 class="reveal">Two&nbsp;commands.</h2>
+      <h2 class="reveal">Two commands, or one&nbsp;download.</h2>
       <p class="note reveal">
-        The second one writes the <code style="font-family:var(--font-mono)">statusLine</code> entry into
-        <code style="font-family:var(--font-mono)">~/.claude/settings.json</code> and leaves everything else in
-        that file alone. Add <code style="font-family:var(--font-mono)">--project</code> to register it in the current
-        repo's <code style="font-family:var(--font-mono)">.claude/settings.json</code> instead.
+        Both paths end in the same place. Pick the one that matches what's already
+        on your machine.
       </p>
 
-      <div class="cmds reveal" style="max-width:52rem">
-        <div class="cmd">
-          <span class="cmd__prompt" aria-hidden="true">$</span>
-          <code class="cmd__text">go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest</code>
-          <button class="cmd__copy" type="button" data-copy="go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest">Copy</button>
+      <div class="ways reveal">
+        <div class="way">
+          <p class="way__label">With Go</p>
+          <div class="cmds" style="margin-top:0">
+            <div class="cmd">
+              <span class="cmd__prompt" aria-hidden="true">$</span>
+              <code class="cmd__text">go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest</code>
+              <button class="cmd__copy" type="button" data-copy="go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest">Copy</button>
+            </div>
+            <div class="cmd">
+              <span class="cmd__prompt" aria-hidden="true">$</span>
+              <code class="cmd__text">claude-status-line-go install</code>
+              <button class="cmd__copy" type="button" data-copy="claude-status-line-go install">Copy</button>
+            </div>
+          </div>
+          <p class="way__note">
+            The second command writes the <code>statusLine</code> entry into
+            <code>~/.claude/settings.json</code> and leaves everything else in that file
+            alone. Add <code>--project</code> to register it in the current repo's
+            <code>.claude/settings.json</code> instead.
+          </p>
+          <p class="way__note">
+            <code>@latest</code> resolves through the Go module proxy, so a freshly pushed
+            tag can take a few minutes to appear. Check what you got with
+            <code>--version</code>.
+          </p>
         </div>
-        <div class="cmd">
-          <span class="cmd__prompt" aria-hidden="true">$</span>
-          <code class="cmd__text">claude-status-line-go install</code>
-          <button class="cmd__copy" type="button" data-copy="claude-status-line-go install">Copy</button>
+
+        <div class="way">
+          <p class="way__label">No Go toolchain</p>
+          <div class="code">
+            <div class="code__bar">
+              <span>bash</span>
+              <button class="code__copy" type="button" data-copy-from="#recipe">Copy</button>
+            </div>
+<pre id="recipe">VERSION=1.5.0 OS=linux ARCH=amd64
+BASE=<span class="s">"https://github.com/williamokano/claude-status-line-go/releases/download/v${VERSION}"</span>
+
+curl -sSLO <span class="s">"${BASE}/claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"</span>
+curl -sSLO <span class="s">"${BASE}/checksums.txt"</span>
+sha256sum --ignore-missing -c checksums.txt
+
+tar -xzf <span class="s">"claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"</span> claude-status-line-go
+sudo install -m 755 claude-status-line-go /usr/local/bin/</pre>
+          </div>
+          <p class="way__note">
+            <code>OS</code> is <code>linux</code>, <code>darwin</code> or <code>windows</code>;
+            <code>ARCH</code> is <code>amd64</code> or <code>arm64</code>. On macOS,
+            <code>shasum -a 256</code> replaces <code>sha256sum</code>. Every
+            <a href="https://github.com/williamokano/claude-status-line-go/releases/latest">release</a>
+            carries all six archives and a <code>checksums.txt</code>.
+          </p>
         </div>
       </div>
 
-      <p class="note reveal" style="margin-top:2.25rem">
-        No Go toolchain? Every
-        <a href="https://github.com/williamokano/claude-status-line-go/releases/latest">release</a>
-        ships archives for Linux, macOS and Windows on both
-        <code style="font-family:var(--font-mono)">amd64</code> and
-        <code style="font-family:var(--font-mono)">arm64</code>, with a
-        <code style="font-family:var(--font-mono)">checksums.txt</code> to verify against.
-      </p>
-
-      <p class="note reveal">
+      <p class="note reveal" style="margin-top:2.75rem">
         Shell completions print to stdout for bash, zsh and fish:
         <code style="font-family:var(--font-mono);font-size:.85em">eval "$(claude-status-line-go --completion zsh)"</code>
       </p>
@@ -644,9 +713,12 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   scroller.addEventListener('scroll', syncFade);
 
   /* ── copy buttons ────────────────────────────────────────────── */
-  document.querySelectorAll('.cmd__copy').forEach(function(btn){
+  document.querySelectorAll('[data-copy],[data-copy-from]').forEach(function(btn){
     btn.addEventListener('click', function(){
-      navigator.clipboard.writeText(btn.dataset.copy).then(function(){
+      var text = btn.dataset.copy != null
+        ? btn.dataset.copy
+        : document.querySelector(btn.dataset.copyFrom).textContent;
+      navigator.clipboard.writeText(text).then(function(){
         btn.textContent = 'Copied';
         btn.dataset.done = '1';
         setTimeout(function(){ btn.textContent = 'Copy'; delete btn.dataset.done; }, 1600);
