@@ -2,10 +2,12 @@
 
 Go CLI tool that reads Claude Code JSON from stdin and prints a formatted status line.
 
+📖 **[okano.dev/claude-status-line-go](https://okano.dev/claude-status-line-go/)**
+
 ## Output Format
 
 ```
-🧠 Opus 4.8·1M │ 📁 claude-status-line-go │ 🌿 feature/cache-stats ●3
+🧠 Opus 5·1M │ 📁 claude-status-line-go │ 🌿 feature/cache-stats ●3
 🟡5h ████████░░ 83% ↺ 22m │ CTX ██████░░░░ 68% │ Σ115k ↓277 ⚡99% │ 📅7d ███████░░░ 74% ↺ 2d4h │ $7.92
 ```
 
@@ -23,11 +25,37 @@ and its countdown switches to `2d4h` form when the reset is more than a day out.
 
 ## Installation
 
+### Prebuilt binaries
+
+No Go toolchain required. Every release ships archives for Linux, macOS and
+Windows on `amd64` and `arm64`, alongside a `checksums.txt`. Pick your platform
+from the [latest release](https://github.com/williamokano/claude-status-line-go/releases/latest),
+or:
+
+```bash
+VERSION=1.5.0 OS=linux ARCH=amd64
+BASE="https://github.com/williamokano/claude-status-line-go/releases/download/v${VERSION}"
+
+curl -sSLO "${BASE}/claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -sSLO "${BASE}/checksums.txt"
+sha256sum --ignore-missing -c checksums.txt
+
+tar -xzf "claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz" claude-status-line-go
+sudo install -m 755 claude-status-line-go /usr/local/bin/
+```
+
+Set `OS` to `linux`, `darwin` or `windows`, and `ARCH` to `amd64` or `arm64`.
+On macOS, `shasum -a 256` replaces `sha256sum`.
+
 ### Using go install
 
 ```bash
 go install github.com/williamokano/claude-status-line-go/cmd/claude-status-line-go@latest
 ```
+
+Because `@latest` resolves through the Go module proxy, a freshly pushed tag can
+take a few minutes to become visible. Check what you actually got with
+`claude-status-line-go --version`.
 
 ### From Source
 
