@@ -25,27 +25,75 @@ and its countdown switches to `2d4h` form when the reset is more than a day out.
 
 ## Installation
 
-### Prebuilt binaries
-
-No Go toolchain required. Every release ships archives for Linux, macOS and
-Windows on `amd64` and `arm64`, alongside a `checksums.txt`. Pick your platform
-from the [latest release](https://github.com/williamokano/claude-status-line-go/releases/latest),
-or:
+### macOS and Linux
 
 ```bash
-VERSION=1.5.0 OS=linux ARCH=amd64
+curl -fsSL https://okano.dev/claude-status-line-go/install.sh | sh
+```
+
+Works out your OS and architecture, resolves the newest release, checks the
+SHA-256 against `checksums.txt`, and installs to `/usr/local/bin` — or
+`~/.local/bin` if that isn't yours to write to. It never calls `sudo`.
+[Read it first](https://okano.dev/claude-status-line-go/install.sh) if you'd rather.
+
+Pin a version, or pick the destination:
+
+```bash
+curl -fsSL https://okano.dev/claude-status-line-go/install.sh | VERSION=1.4.0 INSTALL_DIR=~/bin sh
+```
+
+<details>
+<summary>Prefer not to pipe into a shell?</summary>
+
+```bash
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+VERSION=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+  https://github.com/williamokano/claude-status-line-go/releases/latest | sed 's#.*/v##')
+
+FILE="claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"
 BASE="https://github.com/williamokano/claude-status-line-go/releases/download/v${VERSION}"
 
-curl -sSLO "${BASE}/claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"
-curl -sSLO "${BASE}/checksums.txt"
-sha256sum --ignore-missing -c checksums.txt
+curl -fsSLO "${BASE}/${FILE}"
+curl -fsSLO "${BASE}/checksums.txt"
+grep " ${FILE}$" checksums.txt | sha256sum -c -   # macOS: shasum -a 256 -c -
 
-tar -xzf "claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz" claude-status-line-go
+tar -xzf "$FILE" claude-status-line-go
 sudo install -m 755 claude-status-line-go /usr/local/bin/
 ```
 
-Set `OS` to `linux`, `darwin` or `windows`, and `ARCH` to `amd64` or `arm64`.
-On macOS, `shasum -a 256` replaces `sha256sum`.
+</details>
+
+### Windows
+
+The Windows archive holds `claude-status-line-go.exe`. `tar` ships with Windows
+10 build 17063 and later, so nothing else is needed.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'   # or Invoke-WebRequest crawls
+
+$Repo    = 'williamokano/claude-status-line-go'
+$Version = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name.TrimStart('v')
+$Arch    = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+
+$File = "claude-status-line-go_${Version}_windows_${Arch}.tar.gz"
+$Base = "https://github.com/$Repo/releases/download/v$Version"
+
+Invoke-WebRequest "$Base/$File" -OutFile $File
+Invoke-WebRequest "$Base/checksums.txt" -OutFile checksums.txt
+
+$want = (Select-String checksums.txt -Pattern ([regex]::Escape($File))).Line.Split(' ')[0]
+$got  = (Get-FileHash $File -Algorithm SHA256).Hash.ToLower()
+if ($want -ne $got) { throw 'checksum mismatch' }
+
+$Dest = "$env:LOCALAPPDATA\Programs\claude-status-line-go"
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+tar -xzf $File -C $Dest claude-status-line-go.exe
+```
+
+Add `$Dest` to your `PATH` to finish. There's no Chocolatey or WinGet package —
+both want a published, moderated manifest rather than a link to a release.
 
 ### Using go install
 

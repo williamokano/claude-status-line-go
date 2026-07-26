@@ -254,6 +254,19 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   line-height:1.85;color:var(--ink);scrollbar-width:thin;
 }
 .code pre .s{color:var(--green)}
+.code pre .c{color:var(--ink-3)}
+
+.drop{margin-top:1.4rem;border-top:1px solid var(--line-soft);padding-top:1.2rem}
+.drop summary{
+  font-family:var(--font-mono);font-size:.75rem;letter-spacing:.06em;
+  color:var(--ink-3);cursor:pointer;list-style:none;
+  display:flex;align-items:center;gap:.55rem;
+}
+.drop summary::-webkit-details-marker{display:none}
+.drop summary::before{content:'+';color:var(--cyan);font-size:.95rem;line-height:1}
+.drop[open] summary::before{content:'−'}
+.drop summary:hover{color:var(--ink-2)}
+.drop .code{margin-top:1.2rem}
 
 /* ── anatomy ──────────────────────────────────────────────────────── */
 .seg{
@@ -646,28 +659,94 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
 
         <div class="way">
           <p class="way__label">No Go toolchain</p>
-          <div class="code">
-            <div class="code__bar">
-              <span>bash</span>
-              <button class="code__copy" type="button" data-copy-from="#recipe">Copy</button>
+
+          <div class="tabs" style="margin-top:0">
+            <div class="tabs__list" role="tablist" aria-label="Operating system">
+              <button class="tab" role="tab" id="tab-unix" aria-controls="panel-unix" aria-selected="true">macOS · Linux</button>
+              <button class="tab" role="tab" id="tab-win" aria-controls="panel-win" aria-selected="false" tabindex="-1">Windows</button>
             </div>
-<pre id="recipe">VERSION=1.5.0 OS=linux ARCH=amd64
+
+            <div class="panel" role="tabpanel" id="panel-unix" aria-labelledby="tab-unix" tabindex="0">
+              <div class="cmd">
+                <span class="cmd__prompt" aria-hidden="true">$</span>
+                <code class="cmd__text">curl -fsSL https://okano.dev/claude-status-line-go/install.sh | sh</code>
+                <button class="cmd__copy" type="button" data-copy="curl -fsSL https://okano.dev/claude-status-line-go/install.sh | sh">Copy</button>
+              </div>
+              <p class="way__note">
+                Works out your OS and architecture, resolves the newest release, checks the
+                SHA-256 against <code>checksums.txt</code>, and installs to
+                <code>/usr/local/bin</code> — or <code>~/.local/bin</code> if that isn't
+                yours to write to. It never calls <code>sudo</code>.
+                <a href="install.sh">Read it first</a> if you'd rather.
+              </p>
+              <p class="way__note">
+                Pin a version or pick the destination:
+                <code>curl -fsSL … | VERSION=1.4.0 INSTALL_DIR=~/bin sh</code>
+              </p>
+
+              <details class="drop">
+                <summary>Prefer not to pipe into a shell?</summary>
+                <div class="code">
+                  <div class="code__bar">
+                    <span>bash</span>
+                    <button class="code__copy" type="button" data-copy-from="#recipe">Copy</button>
+                  </div>
+<pre id="recipe">OS=$(uname -s | tr <span class="s">'[:upper:]'</span> <span class="s">'[:lower:]'</span>)
+ARCH=$(uname -m | sed <span class="s">'s/x86_64/amd64/; s/aarch64/arm64/'</span>)
+VERSION=$(curl -fsSLI -o /dev/null -w <span class="s">'%{url_effective}'</span> \
+  https://github.com/williamokano/claude-status-line-go/releases/latest | sed <span class="s">'s#.*/v##'</span>)
+
+FILE=<span class="s">"claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"</span>
 BASE=<span class="s">"https://github.com/williamokano/claude-status-line-go/releases/download/v${VERSION}"</span>
 
-curl -sSLO <span class="s">"${BASE}/claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"</span>
-curl -sSLO <span class="s">"${BASE}/checksums.txt"</span>
-sha256sum --ignore-missing -c checksums.txt
+curl -fsSLO <span class="s">"${BASE}/${FILE}"</span>
+curl -fsSLO <span class="s">"${BASE}/checksums.txt"</span>
+grep <span class="s">" ${FILE}$"</span> checksums.txt | sha256sum -c -   <span class="c"># macOS: shasum -a 256 -c -</span>
 
-tar -xzf <span class="s">"claude-status-line-go_${VERSION}_${OS}_${ARCH}.tar.gz"</span> claude-status-line-go
+tar -xzf <span class="s">"$FILE"</span> claude-status-line-go
 sudo install -m 755 claude-status-line-go /usr/local/bin/</pre>
+                </div>
+              </details>
+            </div>
+
+            <div class="panel" role="tabpanel" id="panel-win" aria-labelledby="tab-win" tabindex="0" hidden>
+              <div class="code">
+                <div class="code__bar">
+                  <span>powershell</span>
+                  <button class="code__copy" type="button" data-copy-from="#recipe-win">Copy</button>
+                </div>
+<pre id="recipe-win">$ErrorActionPreference = <span class="s">'Stop'</span>
+$ProgressPreference = <span class="s">'SilentlyContinue'</span>   <span class="c"># or Invoke-WebRequest crawls</span>
+
+$Repo    = <span class="s">'williamokano/claude-status-line-go'</span>
+$Version = (Invoke-RestMethod <span class="s">"https://api.github.com/repos/$Repo/releases/latest"</span>).tag_name.TrimStart(<span class="s">'v'</span>)
+$Arch    = <span class="c">if</span> ($env:PROCESSOR_ARCHITECTURE -eq <span class="s">'ARM64'</span>) { <span class="s">'arm64'</span> } <span class="c">else</span> { <span class="s">'amd64'</span> }
+
+$File = <span class="s">"claude-status-line-go_${Version}_windows_${Arch}.tar.gz"</span>
+$Base = <span class="s">"https://github.com/$Repo/releases/download/v$Version"</span>
+
+Invoke-WebRequest <span class="s">"$Base/$File"</span> -OutFile $File
+Invoke-WebRequest <span class="s">"$Base/checksums.txt"</span> -OutFile checksums.txt
+
+$want = (Select-String checksums.txt -Pattern ([regex]::Escape($File))).Line.Split(<span class="s">' '</span>)[0]
+$got  = (Get-FileHash $File -Algorithm SHA256).Hash.ToLower()
+<span class="c">if</span> ($want -ne $got) { <span class="c">throw</span> <span class="s">'checksum mismatch'</span> }
+
+$Dest = <span class="s">"$env:LOCALAPPDATA\Programs\claude-status-line-go"</span>
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+tar -xzf $File -C $Dest claude-status-line-go.exe</pre>
+              </div>
+              <p class="way__note">
+                The Windows archive holds <code>claude-status-line-go.exe</code>.
+                <code>tar</code> ships with Windows 10 build 17063 and later, so nothing
+                else is needed. Add <code>$Dest</code> to your <code>PATH</code> to finish.
+              </p>
+              <p class="way__note">
+                There's no Chocolatey or WinGet package — both want a published, moderated
+                manifest rather than a link to a release.
+              </p>
+            </div>
           </div>
-          <p class="way__note">
-            <code>OS</code> is <code>linux</code>, <code>darwin</code> or <code>windows</code>;
-            <code>ARCH</code> is <code>amd64</code> or <code>arm64</code>. On macOS,
-            <code>shasum -a 256</code> replaces <code>sha256sum</code>. Every
-            <a href="https://github.com/williamokano/claude-status-line-go/releases/latest">release</a>
-            carries all six archives and a <code>checksums.txt</code>.
-          </p>
         </div>
       </div>
 
@@ -726,27 +805,38 @@ sudo install -m 755 claude-status-line-go /usr/local/bin/</pre>
     });
   });
 
-  /* ── tabs ────────────────────────────────────────────────────── */
-  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
-  function select(i){
-    tabs.forEach(function(t, j){
-      var on = i === j;
-      t.setAttribute('aria-selected', on ? 'true' : 'false');
-      t.tabIndex = on ? 0 : -1;
-      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
-    });
-  }
-  tabs.forEach(function(t, i){
-    t.addEventListener('click', function(){ select(i); });
-    t.addEventListener('keydown', function(e){
-      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-      if (!d) return;
-      e.preventDefault();
-      var n = (i + d + tabs.length) % tabs.length;
-      select(n);
-      tabs[n].focus();
+  /* ── tabs — each list is independent of the others ───────────── */
+  document.querySelectorAll('.tabs__list').forEach(function(list){
+    var tabs = Array.prototype.slice.call(list.querySelectorAll('.tab'));
+    function select(i){
+      tabs.forEach(function(t, j){
+        var on = i === j;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+      });
+    }
+    tabs.forEach(function(t, i){
+      t.addEventListener('click', function(){ select(i); });
+      t.addEventListener('keydown', function(e){
+        var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!d) return;
+        e.preventDefault();
+        var n = (i + d + tabs.length) % tabs.length;
+        select(n);
+        tabs[n].focus();
+      });
     });
   });
+
+  /* Open the Windows tab for Windows visitors. macOS/Linux stays the default,
+     so a failed guess still lands on the tab that covers two of three. */
+  var winTab = document.getElementById('tab-win');
+  if (winTab) {
+    var plat = (navigator.userAgentData && navigator.userAgentData.platform) ||
+               navigator.platform || navigator.userAgent || '';
+    if (/win/i.test(plat)) winTab.click();
+  }
 
   /* ── scroll reveal ───────────────────────────────────────────── */
   var reveals = document.querySelectorAll('.reveal');
