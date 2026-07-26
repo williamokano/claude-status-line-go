@@ -124,3 +124,47 @@ func TestUnnamedPluginIsSkipped(t *testing.T) {
 		t.Errorf("got %+v, want only the named plugin", cfg.Plugins)
 	}
 }
+
+// Names key the cache file and the {plugin.<name>} placeholders, so a duplicate
+// would silently share one cache with the first and make placeholders ambiguous.
+func TestDuplicatePluginNameIsDropped(t *testing.T) {
+	writeConfig(t, `
+plugins:
+  - name: dup
+    command: "echo first"
+  - name: dup
+    command: "echo second"
+`)
+
+	cfg, _ := Load()
+	if len(cfg.Plugins) != 1 {
+		t.Fatalf("got %d plugins, want 1", len(cfg.Plugins))
+	}
+	if cfg.Plugins[0].Command != "echo first" {
+		t.Errorf("kept %q, want the first declaration", cfg.Plugins[0].Command)
+	}
+}
+
+func TestPluginWithNoSourceIsDropped(t *testing.T) {
+	writeConfig(t, "plugins:\n  - name: empty\n  - name: ok\n    file: /tmp/x.json\n")
+
+	cfg, _ := Load()
+	if len(cfg.Plugins) != 1 || cfg.Plugins[0].Name != "ok" {
+		t.Errorf("got %+v, want only the plugin with a source", cfg.Plugins)
+	}
+}
+
+// Both sources set is ambiguous. Command wins and file is cleared, so nothing
+// downstream has to guess.
+func TestPluginWithBothSourcesPrefersCommand(t *testing.T) {
+	writeConfig(t, "plugins:\n  - name: both\n    file: /tmp/x.json\n    command: \"echo hi\"\n")
+
+	cfg, _ := Load()
+	if len(cfg.Plugins) != 1 {
+		t.Fatalf("got %d plugins, want 1", len(cfg.Plugins))
+	}
+	if cfg.Plugins[0].Command != "echo hi" || cfg.Plugins[0].File != "" {
+		t.Errorf("got command=%q file=%q, want the command kept and file cleared",
+			cfg.Plugins[0].Command, cfg.Plugins[0].File)
+	}
+}

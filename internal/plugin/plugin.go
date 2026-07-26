@@ -69,9 +69,18 @@ var known = map[string]bool{
 	"state": true, "hide": true, "raw": true,
 }
 
+// MaxOutputBytes caps what a plugin may report. Without a limit, a command
+// that accidentally prints a file ends up in the cache and then on the status
+// line — a stray `cat` produced a two megabyte status line before this existed.
+const MaxOutputBytes = 64 * 1024
+
 // Parse reads plugin output. Anything that isn't a JSON object is taken as
 // plain text, so `echo hello` is a valid plugin.
 func Parse(b []byte) (Output, error) {
+	if len(b) > MaxOutputBytes {
+		return Output{}, fmt.Errorf("output is %d bytes, over the %d byte limit", len(b), MaxOutputBytes)
+	}
+
 	trimmed := strings.TrimSpace(string(b))
 	if trimmed == "" {
 		return Output{Hide: true}, nil

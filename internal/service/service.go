@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
 	"github.com/williamokano/claude-status-line-go/internal/plugin"
@@ -332,6 +333,11 @@ func pluginFields(spec plugin.Spec, data plugin.Output, barSize int) map[string]
 // owns the appearance so plugin segments match the native ones.
 func (s *Service) renderPlugin(spec plugin.Spec, data plugin.Output, f map[string]string) string {
 	if data.Raw != "" {
+		// Oversized raw output loses its colour rather than being cut mid
+		// escape sequence, which would leave the rest of the line mis-coloured.
+		if utf8.RuneCountInString(stripANSI(data.Raw)) > maxSegmentRunes {
+			return truncateSegment(stripANSI(data.Raw))
+		}
 		return data.Raw
 	}
 
@@ -341,7 +347,7 @@ func (s *Service) renderPlugin(spec plugin.Spec, data plugin.Output, f map[strin
 	}
 	body = expandFields(body, f)
 
-	body = strings.TrimSpace(body)
+	body = truncateSegment(strings.TrimSpace(body))
 	if body == "" {
 		return ""
 	}
@@ -421,6 +427,70 @@ func ansiColor(name string) string {
 	default:
 		return ""
 	}
+}
+
+// maxSegmentRunes caps one plugin segment. A plugin may report as much as it
+// likes; the status line is two lines in somebody's terminal.
+const maxSegmentRunes = 120
+
+func truncateSegment(s string) string {
+	r := []rune(s)
+	if len(r) <= maxSegmentRunes {
+		return s
+	}
+	return string(r[:maxSegmentRunes-1]) + "…"
+}
+
+// PluginStatus is one plugin's state, reported by the `plugins` command.
+// Claude Code swallows this tool's stderr, so without a way to ask, a
+// misconfigured plugin is simply invisible.
+type PluginStatus struct {
+	Name     string
+	Source   string // "file" or "command"
+	Detail   string // the path or the command
+	State    string // ok | no data | error
+	Age      string // how old the cached value is, for command sources
+	Stale    bool
+	Rendered string
+	Err      string
+}
+
+// InspectPlugins resolves every plugin and reports what happened, without
+// starting any background refresh.
+func (s *Service) InspectPlugins(projectDir string) []PluginStatus {
+	out := make([]PluginStatus, 0, len(s.cfg.Plugins))
+
+	for _, spec := range s.cfg.Plugins {
+		st := PluginStatus{Name: spec.Name, Source: "file", Detail: spec.File}
+		if spec.Command != "" {
+			st.Source, st.Detail = "command", spec.Command
+		}
+
+		data, needsRefresh, err := resolvePlugin(spec, projectDir)
+		st.Stale = needsRefresh
+
+		switch {
+		case err != nil:
+			st.State, st.Err = "error", err.Error()
+		case data.Hide:
+			st.State = "no data"
+		default:
+			st.State = "ok"
+			st.Rendered = s.renderPlugin(spec, data, pluginFields(spec, data, s.cfg.BarSize))
+		}
+
+		// Age stays empty when the command has never produced a cached value,
+		// which the caller reports differently from "cached, but stale".
+		if spec.Command != "" {
+			if age, ok := spec.CacheAge(projectDir); ok {
+				st.Age = age.Round(time.Second).String()
+			}
+		}
+
+		out = append(out, st)
+	}
+
+	return out
 }
 
 func trimFloat(f float64) string {

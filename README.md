@@ -247,6 +247,41 @@ and has `CSL_PROJECT_DIR` and `CSL_PLUGIN_NAME` set. Its cache is keyed per
 project, so task counts and PR state don't leak between repos. If it fails, the
 last good value stays on screen and the error goes to stderr.
 
+### Checking a plugin
+
+Claude Code discards this tool's stderr, so a plugin that fails has nowhere to
+say so and simply doesn't appear. Ask instead:
+
+```bash
+claude-status-line-go plugins
+```
+
+```
+issues  [command]
+  source   printf '{"value":31,"max":100}'
+  state    ok, cached 1s ago
+  renders  🎯 ███░░░░░░░ 31/100
+
+broken  [command]
+  source   echo 'oh no' >&2; exit 3
+  state    no data — the command has not run yet, so the next render will start it
+```
+
+`claude-status-line-go plugins refresh [name]` runs command plugins in the
+foreground and reports what went wrong:
+
+```
+✓ issues
+✗ broken: plugin "broken": exit status 3: oh no
+```
+
+### Limits
+
+Plugin output is capped at 64 KB, and a single rendered segment at 120
+characters — a plugin that accidentally prints a file shouldn't take the
+terminal with it. Names must be unique: they key the cache file and the
+placeholders. Setting both `file` and `command` uses the command and warns.
+
 ### Output contract
 
 Emit a JSON object on stdout:

@@ -172,3 +172,17 @@ func TestLoadWithoutSourceErrors(t *testing.T) {
 		t.Error("want an error when neither file nor command is set")
 	}
 }
+
+// A command that accidentally prints a file must not reach the status line.
+func TestParseRejectsOversizedOutput(t *testing.T) {
+	big := make([]byte, MaxOutputBytes+1)
+	for i := range big {
+		big[i] = 'x'
+	}
+	if _, err := Parse(big); err == nil {
+		t.Error("want an error for output over the size limit")
+	}
+	if _, err := Parse(big[:MaxOutputBytes]); err != nil {
+		t.Errorf("output exactly at the limit should be accepted: %v", err)
+	}
+}

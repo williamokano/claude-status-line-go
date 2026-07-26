@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
 	"github.com/williamokano/claude-status-line-go/internal/plugin"
@@ -169,5 +170,82 @@ func TestRenderPlacesPluginsBeforeCost(t *testing.T) {
 	}
 	if !(iAlpha < iBeta && iBeta < iCost) {
 		t.Errorf("want alpha < beta < cost, got %d/%d/%d in %q", iAlpha, iBeta, iCost, out)
+	}
+}
+
+// A long segment is truncated so one chatty plugin can't take over the line.
+func TestLongSegmentIsTruncated(t *testing.T) {
+	stubLoader(t, func(plugin.Spec) (plugin.Output, error) {
+		return plugin.Output{Text: strings.Repeat("x", 400)}, nil
+	})
+
+	got := New(config.Config{BarSize: 10, Plugins: specs("chatty")}).buildPlugins("")
+	if len(got) != 1 {
+		t.Fatalf("got %d segments, want 1", len(got))
+	}
+	if n := utf8.RuneCountInString(got[0].render); n != maxSegmentRunes {
+		t.Errorf("segment is %d runes, want %d", n, maxSegmentRunes)
+	}
+	if !strings.HasSuffix(got[0].render, "…") {
+		t.Error("a truncated segment should end in an ellipsis")
+	}
+}
+
+// Oversized raw output drops its colour rather than being cut mid escape,
+// which would leave the rest of the line mis-coloured.
+func TestOversizedRawLosesColorRatherThanBreaking(t *testing.T) {
+	stubLoader(t, func(plugin.Spec) (plugin.Output, error) {
+		return plugin.Output{Raw: "\033[31m" + strings.Repeat("y", 400) + "\033[0m"}, nil
+	})
+
+	got := New(config.Config{BarSize: 10, Plugins: specs("shouty")}).buildPlugins("")
+	if len(got) != 1 {
+		t.Fatalf("got %d segments, want 1", len(got))
+	}
+	if strings.Contains(got[0].render, "\033") {
+		t.Error("truncated raw output should carry no escape sequences")
+	}
+	if n := utf8.RuneCountInString(got[0].render); n != maxSegmentRunes {
+		t.Errorf("segment is %d runes, want %d", n, maxSegmentRunes)
+	}
+}
+
+// A stale plugin must actually kick off the background refresh.
+func TestStalePluginSpawnsRefresh(t *testing.T) {
+	origResolve, origSpawn := resolvePlugin, spawnRefresh
+	t.Cleanup(func() { resolvePlugin, spawnRefresh = origResolve, origSpawn })
+
+	resolvePlugin = func(spec plugin.Spec, _ string) (plugin.Output, bool, error) {
+		return plugin.Output{Text: spec.Name}, spec.Name == "stale", nil
+	}
+	var refreshed []string
+	spawnRefresh = func(name, _ string, _ []byte) error {
+		refreshed = append(refreshed, name)
+		return nil
+	}
+
+	New(config.Config{BarSize: 10, Plugins: specs("fresh", "stale")}).buildPlugins("")
+
+	if len(refreshed) != 1 || refreshed[0] != "stale" {
+		t.Errorf("refreshed %v, want only [stale]", refreshed)
+	}
+}
+
+// The parent must hand the project directory to the child, or the refresh keys
+// its cache somewhere the next render will never look.
+func TestRefreshReceivesProjectDir(t *testing.T) {
+	origResolve, origSpawn := resolvePlugin, spawnRefresh
+	t.Cleanup(func() { resolvePlugin, spawnRefresh = origResolve, origSpawn })
+
+	resolvePlugin = func(plugin.Spec, string) (plugin.Output, bool, error) {
+		return plugin.Output{Hide: true}, true, nil
+	}
+	var gotDir string
+	spawnRefresh = func(_, dir string, _ []byte) error { gotDir = dir; return nil }
+
+	New(config.Config{BarSize: 10, Plugins: specs("p")}).buildPlugins("/my/project")
+
+	if gotDir != "/my/project" {
+		t.Errorf("child got project dir %q, want /my/project", gotDir)
 	}
 }
