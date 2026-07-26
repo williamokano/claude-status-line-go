@@ -211,7 +211,7 @@ func TestService_Run(t *testing.T) {
 
 	input := `{
 		"model": {"display_name": "Opus 4.8", "id": "claude-opus-4-8"},
-		"workspace": {"project_dir": "/home/user/payments-api", "current_dir": "/home/user/payments-api"},
+		"workspace": {"project_dir": "/home/user/claude-status-line-go", "current_dir": "/home/user/claude-status-line-go"},
 		"context_window": {
 			"used_percentage": 68,
 			"context_window_size": 1000000,
@@ -258,7 +258,7 @@ func TestService_Run(t *testing.T) {
 	if !strings.Contains(output, "🧠 Opus 4.8·1M") {
 		t.Errorf("output missing model: %s", output)
 	}
-	if !strings.Contains(output, "payments-api") {
+	if !strings.Contains(output, "claude-status-line-go") {
 		t.Errorf("output missing project: %s", output)
 	}
 	if !strings.Contains(output, "5h") {
@@ -303,7 +303,7 @@ func TestService_Run_WeeklyMirrorsFiveHour(t *testing.T) {
 
 	input := fmt.Sprintf(`{
 		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
-		"workspace": {"project_dir": "/home/user/payments-api"},
+		"workspace": {"project_dir": "/home/user/claude-status-line-go"},
 		"context_window": {"used_percentage": 37, "context_window_size": 1000000},
 		"cost": {"total_cost_usd": 39.80},
 		"rate_limits": {
@@ -339,7 +339,7 @@ func TestService_Run_TokensLeadWithTotal(t *testing.T) {
 
 	input := `{
 		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
-		"workspace": {"project_dir": "/home/user/payments-api"},
+		"workspace": {"project_dir": "/home/user/claude-status-line-go"},
 		"context_window": {
 			"used_percentage": 37,
 			"context_window_size": 1000000,
@@ -378,7 +378,7 @@ func TestService_Run_WeeklyWithoutReset(t *testing.T) {
 
 	input := `{
 		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
-		"workspace": {"project_dir": "/home/user/payments-api"},
+		"workspace": {"project_dir": "/home/user/claude-status-line-go"},
 		"context_window": {"used_percentage": 37, "context_window_size": 1000000},
 		"cost": {"total_cost_usd": 1.00},
 		"rate_limits": {
@@ -411,7 +411,7 @@ func TestService_Run_WeeklyColor(t *testing.T) {
 
 	input := `{
 		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
-		"workspace": {"project_dir": "/home/user/payments-api"},
+		"workspace": {"project_dir": "/home/user/claude-status-line-go"},
 		"context_window": {"used_percentage": 10, "context_window_size": 1000000},
 		"rate_limits": {
 			"five_hour": {"used_percentage": 5},
@@ -600,7 +600,7 @@ func TestService_Run_PartialJSON(t *testing.T) {
 
 	input := `{
 		"model": {"display_name": "Sonnet 5", "id": "claude-sonnet-5"},
-		"workspace": {"project_dir": "/home/user/payments-api", "current_dir": "/home/user/payments-api"},
+		"workspace": {"project_dir": "/home/user/claude-status-line-go", "current_dir": "/home/user/claude-status-line-go"},
 		"context_window": {
 			"used_percentage": 42,
 			"context_window_size": 200000,
@@ -626,7 +626,7 @@ func TestService_Run_PartialJSON(t *testing.T) {
 	if !strings.Contains(output, "🧠 Sonnet 5·200k") {
 		t.Errorf("output missing model: %s", output)
 	}
-	if !strings.Contains(output, "payments-api") {
+	if !strings.Contains(output, "claude-status-line-go") {
 		t.Errorf("output missing project: %s", output)
 	}
 	if !strings.Contains(output, "55%") {
