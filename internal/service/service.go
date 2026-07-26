@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/williamokano/claude-status-line-go/internal/config"
@@ -193,28 +194,68 @@ func (s *Service) buildView(input Input) view {
 	}
 }
 
-// buildPlugins resolves every configured plugin. A plugin that errors or has
-// nothing to say is dropped: a broken segment must never cost you the rest of
-// the status line.
+// loadPlugin is a variable so tests can swap in a deliberately slow loader and
+// prove buildPlugins fans out rather than serialising.
+var loadPlugin = func(spec plugin.Spec) (plugin.Output, error) { return spec.Load() }
+
+// buildPlugins resolves every configured plugin concurrently. Reading a file
+// is fast enough that serialising wouldn't show up today, but command sources
+// will each cost their own round trip, and in series those add up on a render
+// budget measured in single-digit milliseconds.
+//
+// A plugin that errors or has nothing to say is dropped: a broken segment must
+// never cost you the rest of the status line.
 func (s *Service) buildPlugins() []pluginView {
-	var out []pluginView
+	specs := s.cfg.Plugins
+	if len(specs) == 0 {
+		return nil
+	}
 
-	for _, spec := range s.cfg.Plugins {
-		data, err := spec.Load()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "claude-status-line-go: plugin %q: %v\n", spec.Name, err)
-			continue
-		}
-		if data.Hide {
-			continue
-		}
+	type result struct {
+		pv  pluginView
+		err error
+		ok  bool
+	}
 
-		pv := pluginView{name: spec.Name, fields: pluginFields(spec, data, s.cfg.BarSize)}
-		pv.render = s.renderPlugin(spec, data, pv.fields)
-		if stripANSI(pv.render) == "" {
-			continue
+	// Each goroutine owns one index, so no mutex is needed to fill this.
+	results := make([]result, len(specs))
+
+	var wg sync.WaitGroup
+	for i, spec := range specs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			data, err := loadPlugin(spec)
+			if err != nil {
+				results[i].err = err
+				return
+			}
+			if data.Hide {
+				return
+			}
+
+			pv := pluginView{name: spec.Name, fields: pluginFields(spec, data, s.cfg.BarSize)}
+			pv.render = s.renderPlugin(spec, data, pv.fields)
+			if stripANSI(pv.render) == "" {
+				return
+			}
+			results[i] = result{pv: pv, ok: true}
+		}()
+	}
+	wg.Wait()
+
+	// Walk the specs, not the completion order: goroutines finish whenever
+	// they finish, but segments must appear in the order they were configured
+	// or the line would reshuffle itself between renders.
+	out := make([]pluginView, 0, len(specs))
+	for i, r := range results {
+		switch {
+		case r.err != nil:
+			fmt.Fprintf(os.Stderr, "claude-status-line-go: plugin %q: %v\n", specs[i].Name, r.err)
+		case r.ok:
+			out = append(out, r.pv)
 		}
-		out = append(out, pv)
 	}
 
 	return out
