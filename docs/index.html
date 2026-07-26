@@ -114,6 +114,8 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   font-size:clamp(1.0625rem,1rem + 0.3vw,1.1875rem);
 }
 .note{color:var(--ink-2);max-width:62ch;margin:1.25rem 0 0}
+.note a{color:var(--cyan);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--cyan) 35%,transparent)}
+.note a:hover{border-bottom-color:var(--cyan)}
 
 /* ── nav ──────────────────────────────────────────────────────────── */
 .nav{
@@ -592,6 +594,15 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
       </div>
 
       <p class="note reveal" style="margin-top:2.25rem">
+        No Go toolchain? Every
+        <a href="https://github.com/williamokano/claude-status-line-go/releases/latest">release</a>
+        ships archives for Linux, macOS and Windows on both
+        <code style="font-family:var(--font-mono)">amd64</code> and
+        <code style="font-family:var(--font-mono)">arm64</code>, with a
+        <code style="font-family:var(--font-mono)">checksums.txt</code> to verify against.
+      </p>
+
+      <p class="note reveal">
         Shell completions print to stdout for bash, zsh and fish:
         <code style="font-family:var(--font-mono);font-size:.85em">eval "$(claude-status-line-go --completion zsh)"</code>
       </p>
