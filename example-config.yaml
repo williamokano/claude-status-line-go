@@ -52,7 +52,9 @@ weekly_show_at: 60           # Show weekly usage when >= this %
 #
 # plugins:
 #   - name: issues
-#     command: "printf '{\"value\":%s,\"max\":100}' \"$(gh issue list --json number --jq 'length')\""
+#     command: >-
+#       printf '{"value":%s,"max":100}'
+#       "$(gh issue list --json number --jq 'length')"
 #     interval: 60s                   # how long a cached value stays fresh (default 60s)
 #     timeout: 5s                     # caps one run of the command (default 5s)
 #     icon: "🎯"
