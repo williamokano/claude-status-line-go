@@ -49,21 +49,24 @@ func DefaultConfig() Config {
 func Load() (Config, error) {
 	cfg := DefaultConfig()
 
-	cfg.ShowCost = getEnvBool("SHOW_COST", cfg.ShowCost)
-	cfg.ShowWeekly = getEnvBool("SHOW_WEEKLY", cfg.ShowWeekly)
-	cfg.ShowTokens = getEnvBool("SHOW_TOKENS", cfg.ShowTokens)
-	cfg.ShowGit = getEnvBool("SHOW_GIT", cfg.ShowGit)
-	cfg.ShowGitDirty = getEnvBool("SHOW_GIT_DIRTY", cfg.ShowGitDirty)
+	// Every setting is namespaced under CSL_, as documented. Reading the bare
+	// names would let an unrelated SHOW_GIT or BAR_SIZE already in the user's
+	// environment silently reshape the status line.
+	cfg.ShowCost = getEnvBool("CSL_SHOW_COST", cfg.ShowCost)
+	cfg.ShowWeekly = getEnvBool("CSL_SHOW_WEEKLY", cfg.ShowWeekly)
+	cfg.ShowTokens = getEnvBool("CSL_SHOW_TOKENS", cfg.ShowTokens)
+	cfg.ShowGit = getEnvBool("CSL_SHOW_GIT", cfg.ShowGit)
+	cfg.ShowGitDirty = getEnvBool("CSL_SHOW_GIT_DIRTY", cfg.ShowGitDirty)
 
-	cfg.BarSize = getEnvInt("BAR_SIZE", cfg.BarSize)
+	cfg.BarSize = getEnvInt("CSL_BAR_SIZE", cfg.BarSize)
 
-	cfg.LimitWarn = getEnvInt("LIMIT_WARN", cfg.LimitWarn)
-	cfg.LimitCrit = getEnvInt("LIMIT_CRIT", cfg.LimitCrit)
+	cfg.LimitWarn = getEnvInt("CSL_LIMIT_WARN", cfg.LimitWarn)
+	cfg.LimitCrit = getEnvInt("CSL_LIMIT_CRIT", cfg.LimitCrit)
 
-	cfg.CtxWarn = getEnvInt("CTX_WARN", cfg.CtxWarn)
-	cfg.CtxCrit = getEnvInt("CTX_CRIT", cfg.CtxCrit)
+	cfg.CtxWarn = getEnvInt("CSL_CTX_WARN", cfg.CtxWarn)
+	cfg.CtxCrit = getEnvInt("CSL_CTX_CRIT", cfg.CtxCrit)
 
-	cfg.WeeklyShowAt = getEnvInt("WEEKLY_SHOW_AT", cfg.WeeklyShowAt)
+	cfg.WeeklyShowAt = getEnvInt("CSL_WEEKLY_SHOW_AT", cfg.WeeklyShowAt)
 
 	cfg.NoColor = getEnvBool("NO_COLOR", false)
 	cfg.Format = os.Getenv("CSL_FORMAT")

@@ -12,8 +12,8 @@ show_git_dirty: true         # Show dirty file count
 bar_size: 10                 # Width of progress bars
 
 # Thresholds (%)
-limit_warn: 60               # Rate limit warning threshold
-limit_crit: 85               # Rate limit critical threshold
+limit_warn: 60               # Rate limit warning threshold (5-hour and weekly)
+limit_crit: 85               # Rate limit critical threshold (5-hour and weekly)
 ctx_warn: 60                 # Context window warning threshold
 ctx_crit: 85                 # Context window critical threshold
 weekly_show_at: 60           # Show weekly usage when >= this %
@@ -22,9 +22,10 @@ weekly_show_at: 60           # Show weekly usage when >= this %
 # Available placeholders:
 #   {model} {ctx_size} {project} {branch} {dirty}
 #   {limit_bar} {limit_pct} {limit_reset}
+#   {weekly_bar} {weekly_pct} {weekly_reset}
 #   {ctx_bar} {ctx_pct}
 #   {tokens_in} {tokens_out} {tokens_cache}
-#   {cost} {weekly_pct}
+#   {cost}
 #   {reset} {dim} {bold}
 #   {red} {green} {yellow} {blue} {magenta} {cyan} {white}
 # format: "{cyan}🧠 {model}·{ctx_size}{reset} {dim}│ 📁 {project}{reset}"

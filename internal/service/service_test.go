@@ -1,9 +1,11 @@
 package service
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -136,27 +138,28 @@ func TestColorForPercent(t *testing.T) {
 }
 
 func TestTimeUntil(t *testing.T) {
-	future := time.Now().Add(2*time.Hour + 30*time.Minute).Unix()
-	past := time.Now().Add(-1 * time.Hour).Unix()
+	// Add a second of slack so the countdown doesn't tick down into the next
+	// lower bucket between building the timestamp and formatting it.
+	in := func(d time.Duration) int64 { return time.Now().Add(d + time.Second).Unix() }
 
 	tests := []struct {
 		name     string
 		input    int64
 		expected string
 	}{
-		{"Future time", future, "2h30m"},
-		{"Past time", past, "0m"},
+		{"Minutes only", in(45 * time.Minute), "45m"},
+		{"Hours and minutes", in(2*time.Hour + 30*time.Minute), "2h30m"},
+		{"Just under a day", in(23*time.Hour + 30*time.Minute), "23h30m"},
+		{"Days and hours", in(2*24*time.Hour + 4*time.Hour), "2d4h"},
+		{"Whole days", in(6 * 24 * time.Hour), "6d0h"},
+		{"Past time", in(-1 * time.Hour), "0m"},
 		{"Zero", 0, ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := timeUntil(tt.input)
-			if tt.name == "Future time" && result == "" {
-				t.Errorf("timeUntil(%d) = %q, want non-empty", tt.input, result)
-			}
-			if tt.name == "Zero" && result != "" {
-				t.Errorf("timeUntil(%d) = %q, want empty", tt.input, result)
+			if result := timeUntil(tt.input); result != tt.expected {
+				t.Errorf("timeUntil(%d) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -246,11 +249,112 @@ func TestService_Run(t *testing.T) {
 	if !strings.Contains(output, "⚡2.3M") {
 		t.Errorf("output missing cache tokens: %s", output)
 	}
-	if !strings.Contains(output, "7d 74%") {
-		t.Errorf("output missing weekly: %s", output)
+	if !weeklySegment.MatchString(output) {
+		t.Errorf("output missing weekly bar/percentage: %s", output)
 	}
 	if !strings.Contains(output, "$7.92") {
 		t.Errorf("output missing cost: %s", output)
+	}
+}
+
+// weeklySegment matches the weekly window rendered the same way as the 5-hour
+// one: icon, progress bar, percentage.
+var weeklySegment = regexp.MustCompile(`📅7d [█░]{10} 74%`)
+
+// TestService_Run_WeeklyMirrorsFiveHour pins the weekly window to the same
+// shape as the 5-hour window — bar, percentage and reset countdown — rather
+// than the bare percentage it used to print.
+func TestService_Run_WeeklyMirrorsFiveHour(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.ShowGit = false
+	cfg.ShowGitDirty = false
+
+	weeklyReset := time.Now().Add(2*24*time.Hour + 4*time.Hour + time.Second).Unix()
+	fiveHourReset := time.Now().Add(1*time.Hour + 11*time.Minute + time.Second).Unix()
+
+	input := fmt.Sprintf(`{
+		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
+		"workspace": {"project_dir": "/home/user/payments-api"},
+		"context_window": {"used_percentage": 37, "context_window_size": 1000000},
+		"cost": {"total_cost_usd": 39.80},
+		"rate_limits": {
+			"five_hour": {"used_percentage": 12, "resets_at": %d},
+			"seven_day": {"used_percentage": 62, "resets_at": %d}
+		}
+	}`, fiveHourReset, weeklyReset)
+
+	output, err := runWithInput(t, New(cfg), input)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	plain := stripANSI(output)
+
+	if !strings.Contains(plain, "🟡5h █░░░░░░░░░ 12% ↺ 1h11m") {
+		t.Errorf("five-hour window not rendered as expected: %s", plain)
+	}
+	if !strings.Contains(plain, "📅7d ██████░░░░ 62% ↺ 2d4h") {
+		t.Errorf("weekly window should mirror the five-hour window: %s", plain)
+	}
+}
+
+// TestService_Run_WeeklyWithoutReset covers Claude Code not reporting a weekly
+// reset time: the bar and percentage still render, just without a countdown.
+func TestService_Run_WeeklyWithoutReset(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.ShowGit = false
+	cfg.ShowGitDirty = false
+
+	input := `{
+		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
+		"workspace": {"project_dir": "/home/user/payments-api"},
+		"context_window": {"used_percentage": 37, "context_window_size": 1000000},
+		"cost": {"total_cost_usd": 1.00},
+		"rate_limits": {
+			"five_hour": {"used_percentage": 12},
+			"seven_day": {"used_percentage": 90}
+		}
+	}`
+
+	output, err := runWithInput(t, New(cfg), input)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	plain := stripANSI(output)
+
+	if !strings.Contains(plain, "📅7d █████████░ 90%") {
+		t.Errorf("weekly window missing: %s", plain)
+	}
+	if strings.Contains(plain, "↺") {
+		t.Errorf("no reset time reported, so no countdown should render: %s", plain)
+	}
+}
+
+// TestService_Run_WeeklyColor confirms the weekly window is colored by the
+// same thresholds as the 5-hour one instead of always being dim.
+func TestService_Run_WeeklyColor(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.ShowGit = false
+	cfg.ShowGitDirty = false
+
+	input := `{
+		"model": {"display_name": "Opus 5", "id": "claude-opus-5"},
+		"workspace": {"project_dir": "/home/user/payments-api"},
+		"context_window": {"used_percentage": 10, "context_window_size": 1000000},
+		"rate_limits": {
+			"five_hour": {"used_percentage": 5},
+			"seven_day": {"used_percentage": 95}
+		}
+	}`
+
+	output, err := runWithInput(t, New(cfg), input)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	if !strings.Contains(output, Red+"📅7d") {
+		t.Errorf("weekly at 95%% should render red (crit): %q", output)
 	}
 }
 

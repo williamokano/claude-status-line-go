@@ -6,8 +6,13 @@ Go CLI tool that reads Claude Code JSON from stdin and prints a formatted status
 
 ```
 🧠 Opus 4.8·1M │ 📁 payments-api │ 🌿 feature/calendar ●3
-🟡5h ████████░░ 83% ↺ 22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 7d 74% │ $7.92
+🟡5h ████████░░ 83% ↺ 22m │ CTX ██████░░░░ 68% │ I420k O77k ⚡2.3M │ 📅7d ███████░░░ 74% ↺ 2d4h │ $7.92
 ```
+
+Both rate-limit windows render the same way — icon, progress bar, percentage and
+time until reset — and share the `limit_warn` / `limit_crit` color thresholds.
+The weekly window only appears once it reaches `weekly_show_at` (60% by default),
+and its countdown switches to `2d4h` form when the reset is more than a day out.
 
 ## Installation
 
@@ -86,8 +91,8 @@ echo '{"model":...}' | claude-status-line-go
 | `CSL_SHOW_GIT` | `true` | Show git branch |
 | `CSL_SHOW_GIT_DIRTY` | `true` | Show dirty file count |
 | `CSL_BAR_SIZE` | `10` | Progress bar width |
-| `CSL_LIMIT_WARN` | `60` | Rate limit warning threshold (%) |
-| `CSL_LIMIT_CRIT` | `85` | Rate limit critical threshold (%) |
+| `CSL_LIMIT_WARN` | `60` | Rate limit warning threshold (%), 5-hour and weekly |
+| `CSL_LIMIT_CRIT` | `85` | Rate limit critical threshold (%), 5-hour and weekly |
 | `CSL_CTX_WARN` | `60` | Context warning threshold (%) |
 | `CSL_CTX_CRIT` | `85` | Context critical threshold (%) |
 | `CSL_WEEKLY_SHOW_AT` | `60` | Show weekly when >= this % |
@@ -124,10 +129,10 @@ Available placeholders:
 | `{project}` | Project folder name |
 | `{branch}` | Git branch name |
 | `{dirty}` | Dirty file count (●3) |
-| `{limit_bar}` | Rate limit progress bar |
-| `{limit_pct}` | Rate limit percentage |
-| `{limit_color}` | Rate limit color ANSI code |
-| `{limit_reset}` | Time until rate limit reset |
+| `{limit_bar}` | 5-hour rate limit progress bar |
+| `{limit_pct}` | 5-hour rate limit percentage |
+| `{limit_color}` | 5-hour rate limit color ANSI code |
+| `{limit_reset}` | Time until the 5-hour limit resets |
 | `{ctx_bar}` | Context progress bar |
 | `{ctx_pct}` | Context percentage |
 | `{ctx_color}` | Context color ANSI code |
@@ -135,7 +140,10 @@ Available placeholders:
 | `{tokens_out}` | Output tokens |
 | `{tokens_cache}` | Cache tokens |
 | `{cost}` | Session cost |
+| `{weekly_bar}` | Weekly usage progress bar |
 | `{weekly_pct}` | Weekly usage percentage |
+| `{weekly_color}` | Weekly usage color ANSI code |
+| `{weekly_reset}` | Time until the weekly limit resets |
 | `{reset}`, `{dim}`, `{bold}` | ANSI format codes |
 | `{red}`, `{green}`, `{yellow}` | ANSI color codes |
 | `{blue}`, `{magenta}`, `{cyan}`, `{white}` | ANSI color codes |
