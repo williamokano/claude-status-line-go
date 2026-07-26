@@ -42,6 +42,11 @@
 
   --gutter:clamp(1.25rem,4vw,2.5rem);
   --maxw:1120px;
+
+  /* Two prose sizes, and only two. Body is for the paragraph that introduces a
+     section; small is for every explanatory note inside one. Anything else and
+     paragraphs doing the same job end up at different sizes. */
+  --text-sm:.9375rem;
 }
 
 *,*::before,*::after{box-sizing:border-box}
@@ -113,7 +118,10 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   margin:1.5rem 0 0;
   font-size:clamp(1.0625rem,1rem + 0.3vw,1.1875rem);
 }
+/* .note introduces a section, directly under its h2. A trailing note that sits
+   alongside block-level prose takes .note--sm so it matches its neighbours. */
 .note{color:var(--ink-2);max-width:62ch;margin:1.25rem 0 0}
+.note.note--sm{font-size:var(--text-sm)}
 .note a{color:var(--cyan);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--cyan) 35%,transparent)}
 .note a:hover{border-bottom-color:var(--cyan)}
 
@@ -228,7 +236,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   display:flex;align-items:center;gap:.7rem;
 }
 .way__label::before{content:'';width:1.75rem;height:1px;background:currentColor;opacity:.55;flex:none}
-.way__note{margin:1.1rem 0 0;color:var(--ink-2);font-size:.9375rem;max-width:62ch}
+.way__note{margin:1.1rem 0 0;color:var(--ink-2);font-size:var(--text-sm);max-width:62ch}
 .way__note code{font-family:var(--font-mono);font-size:.85em;color:var(--ink)}
 .way__note a{color:var(--cyan);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--cyan) 35%,transparent)}
 .way__note a:hover{border-bottom-color:var(--cyan)}
@@ -287,7 +295,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   font-family:var(--font-mono);font-size:.7rem;letter-spacing:.13em;
   text-transform:uppercase;color:var(--ink-3);margin:0 0 .3rem;
 }
-.seg__text{margin:0;color:var(--ink-2);font-size:.9375rem}
+.seg__text{margin:0;color:var(--ink-2);font-size:var(--text-sm)}
 .seg__text code{
   font-family:var(--font-mono);font-size:.85em;color:var(--ink);
   background:var(--ground-2);border:1px solid var(--line-soft);
@@ -307,7 +315,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
   text-transform:uppercase;color:var(--ink-3);margin:.85rem 0 .45rem;
 }
 .step__label code{text-transform:none;font-family:var(--font-mono);letter-spacing:.04em}
-.step__text{margin:0;font-size:.9375rem;color:var(--ink-2)}
+.step__text{margin:0;font-size:var(--text-sm);color:var(--ink-2)}
 
 /* ── tabs ─────────────────────────────────────────────────────────── */
 .tabs{margin-top:2.5rem;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--ground-2)}
@@ -332,7 +340,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
 .panel pre .v{color:var(--green)}
 .panel pre .c{color:var(--ink-3)}
 .panel pre .s{color:var(--yellow)}
-.panel__note{margin:1.2rem 0 0;font-size:.875rem;color:var(--ink-3);max-width:60ch}
+.panel__note{margin:1.2rem 0 0;font-size:var(--text-sm);color:var(--ink-3);max-width:60ch}
 
 .vars{display:grid;gap:0;margin:0}
 @media(min-width:700px){.vars{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:2.5rem}}
@@ -717,6 +725,100 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
       </div>
 
       <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
+        <p class="way__label">What a slow command actually does</p>
+        <p class="way__note" style="margin-top:0">
+          Five consecutive renders with a command that takes 800&nbsp;ms, timed on
+          a real terminal. The command never lands on the render path, so the cost
+          of the status line doesn't move.
+        </p>
+
+        <div style="margin-top:1.4rem">
+          <div class="seg">
+            <div class="seg__code"><span class="dim">1 ·</span> <span class="ok">4 ms</span> <span class="dim">· (nothing)</span></div>
+            <div>
+              <p class="seg__name">Cold</p>
+              <p class="seg__text">No cached value, so no segment. The render hands the command to a detached process and exits without waiting.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">2 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
+            <div>
+              <p class="seg__name">First value</p>
+              <p class="seg__text">The background run finished, so the cache has something to draw.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">3 ·</span> <span class="ok">3 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
+            <div>
+              <p class="seg__name">Fresh</p>
+              <p class="seg__text">Inside <code>interval</code>, so nothing is spawned at all — this is a file read and no more.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">4 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 █░░░░░░░░░ 1/10</div>
+            <div>
+              <p class="seg__name">Stale</p>
+              <p class="seg__text">Past <code>interval</code>. The <em>old</em> value is drawn immediately and a refresh starts behind it — you never wait 800&nbsp;ms for a number.</p>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg__code"><span class="dim">5 ·</span> <span class="ok">5 ms</span> <span class="dim">·</span> 🧩 ██░░░░░░░░ 2/10</div>
+            <div>
+              <p class="seg__name">Caught up</p>
+              <p class="seg__text">The refresh landed, so the next render shows it. The trade is that a number can be up to <code>interval</code> old — never that the line is slow.</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="way__note">
+          If the command fails, the last good value stays on screen rather than the
+          segment vanishing. If it has never succeeded, there's simply nothing to draw.
+        </p>
+      </div>
+
+      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
+        <p class="way__label">A real one, start to finish</p>
+        <p class="way__note" style="margin-top:0">
+          Commits you haven't pushed. No API tokens, no setup — it works in any git
+          repo, and <code>hide_when: zero</code> means it's invisible until you're
+          actually behind.
+        </p>
+        <div class="code" style="margin-top:1.4rem">
+          <div class="code__bar">
+            <span>claude-status-line.yaml</span>
+            <button class="code__copy" type="button" data-copy-from="#recipe-unpushed">Copy</button>
+          </div>
+<pre id="recipe-unpushed"><span class="k">plugins</span>:
+  - <span class="k">name</span>: <span class="v">unpushed</span>
+    <span class="k">command</span>: <span class="c">&gt;-</span>
+      <span class="s">printf '{"value":%s,"max":20,"label":"unpushed"}'</span>
+      <span class="s">"$(git log --oneline @{u}.. 2&gt;/dev/null | wc -l)"</span>
+    <span class="k">interval</span>: <span class="v">30s</span>
+    <span class="k">icon</span>: <span class="s">"⬆"</span>
+    <span class="k">bar</span>: <span class="v">true</span>
+    <span class="k">hide_when</span>: <span class="v">zero</span>
+    <span class="k">thresholds</span>:
+      - { <span class="k">at</span>: <span class="v">0</span>,  <span class="k">color</span>: <span class="v">green</span> }
+      - { <span class="k">at</span>: <span class="v">25</span>, <span class="k">color</span>: <span class="v">yellow</span> }
+      - { <span class="k">at</span>: <span class="v">50</span>, <span class="k">color</span>: <span class="v">red</span> }</pre>
+        </div>
+        <div class="sl" style="margin-top:1.4rem">
+          <div class="sl__bar"><span>Three commits behind, then in sync</span></div>
+          <div class="sl__body">
+            <div class="sl__scroll">
+              <p class="sl__line"><span class="ok">🟡5h ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">CTX ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">⬆ █░░░░░░░░░ 3/20</span><span class="dim"> │ </span><span class="money">$0.00</span></p>
+              <p class="sl__line"><span class="ok">🟡5h ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="ok">CTX ░░░░░░░░░░ 0%</span><span class="dim"> │ </span><span class="money">$0.00</span></p>
+            </div>
+          </div>
+        </div>
+        <p class="way__note">
+          The second line is the same plugin after pushing: at zero it takes no
+          space at all. Outside a git repo, or on a branch with no upstream, the
+          count is zero and the segment stays hidden — no error, no noise.
+        </p>
+      </div>
+
+      <div class="way reveal" style="margin-top:clamp(2.5rem,5vw,3.5rem)">
         <p class="way__label">When one doesn't show up</p>
         <div class="cmds" style="margin-top:0;max-width:34rem">
           <div class="cmd">
@@ -740,7 +842,7 @@ h3{font-size:1rem;font-weight:600;font-stretch:108%;line-height:1.3}
         </p>
       </div>
 
-      <p class="note reveal" style="margin-top:2.75rem">
+      <p class="note note--sm reveal" style="margin-top:2.75rem">
         A plugin emits JSON on stdout —
         <code style="font-family:var(--font-mono);font-size:.85em">{"value": 12, "max": 33, "label": "aplicar"}</code>
         — and bare text counts too, so <code style="font-family:var(--font-mono)">echo "12 left"</code>
@@ -884,7 +986,7 @@ tar -xzf $File -C $Dest claude-status-line-go.exe</pre>
         </div>
       </div>
 
-      <p class="note reveal" style="margin-top:2.75rem">
+      <p class="note note--sm reveal" style="margin-top:2.75rem">
         Shell completions print to stdout for bash, zsh and fish:
         <code style="font-family:var(--font-mono);font-size:.85em">eval "$(claude-status-line-go --completion zsh)"</code>
       </p>
